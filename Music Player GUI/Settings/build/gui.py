@@ -1,0 +1,175 @@
+from pathlib import Path
+
+# from tkinter import *
+from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage
+
+
+OUTPUT_PATH = Path(__file__).parent
+ASSETS_PATH = OUTPUT_PATH / Path(r"C:\Users\tpadmin\Desktop\Music Player GUI\Settings\build\assets\frame0")
+
+
+def relative_to_assets(path: str) -> Path:
+    return ASSETS_PATH / Path(path)
+
+
+window = Tk()
+
+window.geometry("800x600")
+window.configure(bg = "#FFFFFF")
+
+
+canvas = Canvas(
+    window,
+    bg = "#FFFFFF",
+    height = 600,
+    width = 800,
+    bd = 0,
+    highlightthickness = 0,
+    relief = "ridge"
+)
+
+canvas.place(x = 0, y = 0)
+canvas.create_text(
+    355.0,
+    15.0,
+    anchor="nw",
+    text="12:00",
+    fill="#000000",
+    font=("Inter Bold", 32 * -1)
+)
+
+canvas.create_text(
+    21.0,
+    131.0,
+    anchor="nw",
+    text="Storage Space Avaliable",
+    fill="#000000",
+    font=("Inter Bold", 32 * -1)
+)
+
+canvas.create_text(
+    678.0,
+    131.0,
+    anchor="nw",
+    text="10 GB",
+    fill="#000000",
+    font=("Inter Bold", 32 * -1)
+)
+
+canvas.create_text(
+    667.0,
+    305.0,
+    anchor="nw",
+    text="5",
+    fill="#000000",
+    font=("Inter Bold", 32 * -1)
+)
+
+canvas.create_text(
+    21.0,
+    304.0,
+    anchor="nw",
+    text="Volume",
+    fill="#000000",
+    font=("Inter Bold", 32 * -1)
+)
+
+canvas.create_text(
+    21.0,
+    486.0,
+    anchor="nw",
+    text="Time Zone",
+    fill="#000000",
+    font=("Inter Bold", 32 * -1)
+)
+
+canvas.create_text(
+    603.0,
+    480.0,
+    anchor="nw",
+    text="Cupertino",
+    fill="#000000",
+    font=("Inter Bold", 32 * -1)
+)
+
+image_image_1 = PhotoImage(
+    file=relative_to_assets("image_1.png"))
+image_1 = canvas.create_image(
+    754.0,
+    35.0,
+    image=image_image_1
+)
+
+canvas.create_rectangle(
+    -3.0,
+    411.0000007674098,
+    799.9993801116943,
+    415.0,
+    fill="#000000",
+    outline="")
+
+canvas.create_rectangle(
+    -3.0,
+    63.0,
+    800.0,
+    66.0,
+    fill="#000000",
+    outline="")
+
+canvas.create_rectangle(
+    -3.0,
+    229.0000007674098,
+    799.9993801116943,
+    233.0,
+    fill="#000000",
+    outline="")
+
+button_image_1 = PhotoImage(
+    file=relative_to_assets("button_1.png"))
+button_1 = Button(
+    image=button_image_1,
+    borderwidth=0,
+    highlightthickness=0,
+    command=lambda: print("button_1 clicked"),
+    relief="flat"
+)
+button_1.place(
+    x=586.0,
+    y=300.0,
+    width=48.0,
+    height=48.0
+)
+
+button_image_2 = PhotoImage(
+    file=relative_to_assets("button_2.png"))
+button_2 = Button(
+    image=button_image_2,
+    borderwidth=0,
+    highlightthickness=0,
+    command=lambda: print("button_2 clicked"),
+    relief="flat"
+)
+button_2.place(
+    x=721.0,
+    y=300.0,
+    width=48.0,
+    height=48.0
+)
+
+canvas.create_rectangle(
+    20.0,
+    12.0,
+    65.0,
+    57.0,
+    fill="#FFFFFF",
+    outline="")
+
+image_image_2 = PhotoImage(
+    file=relative_to_assets("image_2.png"))
+image_2 = canvas.create_image(
+    41.0,
+    34.0,
+    image=image_image_2
+)
+window.resizable(False, False)
+window.mainloop()
