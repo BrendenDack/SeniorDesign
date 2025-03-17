@@ -1,3 +1,6 @@
+# This is bascially the same code as the Music Player GUI except I merged them into one to test some things 
+# Also have been modified to have a potentially working clock of each screen
+
 #Music Library 
 from pathlib import Path
 
