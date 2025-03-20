@@ -1,5 +1,5 @@
 # This is bascially the same code as the Music Player GUI folder except I merged them into one to test some things 
-# Also have been modified to have a potentially working clock of each screen
+# Also have been modified to have a potentially working clock of each screen. Not too sure how well itll work with Tkinter
 
 #Music Library 
 from pathlib import Path
