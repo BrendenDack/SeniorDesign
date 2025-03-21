@@ -22,7 +22,7 @@ def get_storage_info(music_folder):
     return total_space, used_space, free_space
 
 # Conversion to kilobytes, megabytes, and gigabytes
-# idk what is going on here tbh 
+# Gonna have to fix this later to properly convert bytes to other units 
 file_size_kb = used_space / 1024
 file_size_mb = file_size_kb / 1024
 file_size_gb = file_size_mb / 1024
