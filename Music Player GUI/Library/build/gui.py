@@ -1,184 +1,149 @@
+#!/usr/bin/python
+# -*- coding:utf-8 -*-
+import sys
+import os
 from pathlib import Path
+import logging
 
-# from tkinter import *
-# Explicit imports to satisfy Flake8
-from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage
+try:
+    import RPi.GPIO as GPIO
+except ModuleNotFoundError:
+    print("Error: RPi.GPIO not found. Please install it with 'pip install RPi.GPIO'")
+    sys.exit(1)
 
+# Library path for Waveshare e-Paper
+base_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+libdir = '/home/advented/audioProductV1/projectCode/e-Paper/RaspberryPi_JetsonNano/python/lib/'
 
+if os.path.exists(libdir):
+    sys.path.append(libdir)
+    print(f"Using library path: {libdir}")
+else:
+    print(f"Error: Library directory {libdir} not found")
+    sys.exit(1)
+
+# Add path for button firmware file
+button_firmware_dir = '/home/advented/audioProductV1/projectCode/'
+button_firmware_path = os.path.join(button_firmware_dir, 'button_firmware.py')
+if os.path.exists(button_firmware_path):
+    sys.path.append(button_firmware_dir)  # Append the directory containing the file
+    print(f"Button firmware file found at: {button_firmware_path}")
+else:
+    print(f"Error: Button firmware file {button_firmware_path} not found")
+    sys.exit(1)
+
+try:
+    from waveshare_epd import epd1in54_V2
+    from button_firmware import ButtonFirmware  # Import from button_firmware.py
+except ModuleNotFoundError as e:
+    print(f"Error: Could not import module - {e}")
+    sys.exit(1)
+
+import time
+from PIL import Image, ImageDraw, ImageFont
+
+# Asset path
 OUTPUT_PATH = Path(__file__).parent
-ASSETS_PATH = OUTPUT_PATH / Path(r"C:\Users\tpadmin\Desktop\Music Player GUI\Library\build\assets\frame0")
+ASSETS_PATH = OUTPUT_PATH / Path("assets/frame0")
 
+logging.basicConfig(level=logging.DEBUG)
 
-def relative_to_assets(path: str) -> Path:
-    return ASSETS_PATH / Path(path)
+# Initialize e-ink display
+print("Initializing e-ink display...")
+epd = epd1in54_V2.EPD()
+epd.init(isPartial=False)
+epd.Clear()
 
+# Scaling for 200x200 display, reduced by 10%
+SCALE_X = 200 / 800  # Original 800px width scaled down to 720px
+SCALE_Y = 200 / 800  # Original 600px height scaled down to 540px
 
-window = Tk()
+def scale_x(x):
+    return int(x * SCALE_X)
 
-window.geometry("800x600")
-window.configure(bg = "#FFFFFF")
+def scale_y(y):
+    return int(y * SCALE_Y)
 
+# Menu items with adjusted coordinates
+MENU_ITEMS = [
+    {"text": "Tip Toe", "x": scale_x(65), "y": scale_y(128)},
+    {"text": "NIGHT DANCER", "x": scale_x(65), "y": scale_y(485)},
+    {"text": "Source Separation", "x": scale_x(616), "y": scale_y(89)},
+]
+SELECTED_INDEX = 0
 
-canvas = Canvas(
-    window,
-    bg = "#FFFFFF",
-    height = 600,
-    width = 800,
-    bd = 0,
-    highlightthickness = 0,
-    relief = "ridge"
-)
+def draw_gui(selected_index):
+    image = Image.new('1', (epd.width, epd.height), 255)
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeMonoBold.ttf', 9)
 
-canvas.place(x = 0, y = 0)
-button_image_1 = PhotoImage(
-    file=relative_to_assets("button_1.png"))
-button_1 = Button(
-    image=button_image_1,
-    borderwidth=0,
-    highlightthickness=0,
-    command=lambda: print("button_1 clicked"),
-    relief="flat"
-)
-button_1.place(
-    x=7.0,
-    y=252.0,
-    width=783.0,
-    height=136.0
-)
+    # Static elements with scaled coordinates
+    draw.text((scale_x(355), scale_y(15)), "12:00", font=font, fill=0)
+    draw.text((scale_x(356), scale_y(128)), "HYBS", font=font, fill=0)
+    draw.text((scale_x(356), scale_y(485)), "imase", font=font, fill=0)
+    draw.rectangle([scale_x(-3), scale_y(411), scale_x(799), scale_y(415)], fill=0)
+    draw.rectangle([scale_x(-3), scale_y(63), scale_x(800), scale_y(66)], fill=0)
+    draw.rectangle([scale_x(-3), scale_y(229), scale_x(799), scale_y(233)], fill=0)
+    draw.rectangle([scale_x(20), scale_y(12), scale_x(65), scale_y(57)], fill=255)
+    draw.rectangle([scale_x(27), scale_y(19), scale_x(57), scale_y(49)], fill=255)
 
-canvas.create_text(
-    355.0,
-    15.0,
-    anchor="nw",
-    text="12:00",
-    fill="#000000",
-    font=("Inter Bold", 32 * -1)
-)
+    # Menu items with highlight
+    for i, item in enumerate(MENU_ITEMS):
+        text = item["text"]
+        x, y = item["x"], item["y"]
+        if i == selected_index:
+            draw.rectangle([x - 2, y - 2, x + 45, y + 11], fill=0)
+            draw.text((x, y), text, font=font, fill=255)
+        else:
+            draw.text((x, y), text, font=font, fill=0)
 
-canvas.create_text(
-    356.0,
-    128.0,
-    anchor="nw",
-    text="HYBS",
-    fill="#000000",
-    font=("Inter Medium", 32 * -1)
-)
+    # Images with scaled sizes
+    try:
+        img_1 = Image.open(ASSETS_PATH / "image_1.png").convert('1').resize((scale_x(45), scale_y(45)))
+        image.paste(img_1, (scale_x(754), scale_y(35)))
+        img_2 = Image.open(ASSETS_PATH / "image_2.png").convert('1').resize((scale_x(27), scale_y(27)))
+        image.paste(img_2, (scale_x(41), scale_y(34)))
+        img_3 = Image.open(ASSETS_PATH / "image_3.png").convert('1').resize((scale_x(27), scale_y(27)))
+        image.paste(img_3, (scale_x(41), scale_y(499)))
+        img_4 = Image.open(ASSETS_PATH / "image_4.png").convert('1').resize((scale_x(27), scale_y(27)))
+        image.paste(img_4, (scale_x(41), scale_y(147)))
+        btn_img = Image.open(ASSETS_PATH / "button_1.png").convert('1').resize((scale_x(705), scale_y(122)))
+        image.paste(btn_img, (scale_x(7), scale_y(252)))
+    except FileNotFoundError as e:
+        logging.warning(f"Asset not found: {e}")
 
-canvas.create_text(
-    356.0,
-    485.0,
-    anchor="nw",
-    text="imase",
-    fill="#515151",
-    font=("Inter Medium", 32 * -1)
-)
+    return image
 
-canvas.create_text(
-    616.0,
-    89.0,
-    anchor="nw",
-    text="Source \nSeparation\nAvailable",
-    fill="#000000",
-    font=("Inter SemiBold", 32 * -1)
-)
+def update_display(epd, image):
+    epd.init(isPartial=False)
+    epd.display(epd.getbuffer(image))
 
-canvas.create_text(
-    610.0,
-    446.0,
-    anchor="nw",
-    text="Source \nSeparation\nUnavailable",
-    fill="#000000",
-    font=("Inter SemiBold", 32 * -1)
-)
+# Callback for button firmware to update GUI
+def gui_callback(selected_index):
+    print(f"Current selection: {MENU_ITEMS[selected_index]['text']}")
+    new_image = draw_gui(selected_index)
+    update_display(epd, new_image)
 
-canvas.create_text(
-    65.0,
-    128.0,
-    anchor="nw",
-    text="Tip Toe",
-    fill="#000000",
-    font=("Inter Bold", 32 * -1)
-)
+# Main execution
+print("Drawing initial GUI...")
+initial_image = draw_gui(SELECTED_INDEX)
+update_display(epd, initial_image)
 
-canvas.create_text(
-    65.0,
-    485.0,
-    anchor="nw",
-    text="NIGHT DANCER",
-    fill="#000000",
-    font=("Inter Bold", 32 * -1)
-)
+print("Setting up button firmware...")
+button_fw = ButtonFirmware(MENU_ITEMS, SELECTED_INDEX, callback=gui_callback)
+button_fw.start()
 
-image_image_1 = PhotoImage(
-    file=relative_to_assets("image_1.png"))
-image_1 = canvas.create_image(
-    754.0,
-    35.0,
-    image=image_image_1
-)
-
-canvas.create_rectangle(
-    -3.0,
-    411.0000007674098,
-    799.9993801116943,
-    415.0,
-    fill="#000000",
-    outline="")
-
-canvas.create_rectangle(
-    -3.0,
-    63.0,
-    800.0,
-    66.0,
-    fill="#000000",
-    outline="")
-
-canvas.create_rectangle(
-    -3.0,
-    229.0000007674098,
-    799.9993801116943,
-    233.0,
-    fill="#000000",
-    outline="")
-
-canvas.create_rectangle(
-    20.0,
-    12.0,
-    65.0,
-    57.0,
-    fill="#FFFFFF",
-    outline="")
-
-canvas.create_rectangle(
-    27.0,
-    19.0,
-    57.0,
-    49.0,
-    fill="#FFFFFF",
-    outline="")
-
-image_image_2 = PhotoImage(
-    file=relative_to_assets("image_2.png"))
-image_2 = canvas.create_image(
-    41.0,
-    34.0,
-    image=image_image_2
-)
-
-image_image_3 = PhotoImage(
-    file=relative_to_assets("image_3.png"))
-image_3 = canvas.create_image(
-    41.0,
-    499.0,
-    image=image_image_3
-)
-
-image_image_4 = PhotoImage(
-    file=relative_to_assets("image_4.png"))
-image_4 = canvas.create_image(
-    41.0,
-    147.0,
-    image=image_image_4
-)
-window.resizable(False, False)
-window.mainloop()
+print("Button navigation active. Press Ctrl+C to exit")
+try:
+    while True:
+        time.sleep(0.1)
+except KeyboardInterrupt:
+    logging.info("Exiting via Ctrl+C...")
+except Exception as e:
+    logging.error(f"Error: {e}")
+    raise
+finally:
+    logging.info("Cleaning up...")
+    button_fw.cleanup()  # Use firmware cleanup
+    epd.sleep()
+    sys.exit(0)
