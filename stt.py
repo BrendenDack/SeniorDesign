@@ -11,22 +11,25 @@ import time
 #didnt workout import pycaw  # For controlling system volume
 
 # Audio Parameters
-RATE = 44100 #16000 original rate used 
+RATE = 48000 #44100 replace #16000 original rate used 
 CHANNELS = 1
-CHUNK = 512 #8000 original chunk size
+CHUNK = 1024 #512 #8000 original chunk size
+WIDTH = 2
 
 # Initialize Vosk model
-model = Model('vosk-model-small-en-us-0.15')
+model = Model('/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/vosk-model-small-en-us-0.15')
 rec = KaldiRecognizer(model, RATE)
 
 input_device_index = 1  # Input device index (USB mic)
-
+#input_device_index = 2
 # Initialize PyAudio
 audio = pyaudio.PyAudio()
 
 # Open input stream with error handling, throwing exceptions 
+
+#try audio jack first (nested try and except)
 try:
-    stream = audio.open(format=pyaudio.paInt16,
+    stream = audio.open(format=audio.get_format_from_width(WIDTH),
                         channels=CHANNELS,
                         rate=RATE,
                         input=True,

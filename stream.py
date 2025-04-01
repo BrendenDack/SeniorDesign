@@ -1,7 +1,7 @@
 import numpy as np
 import threading
 import queue
-import pyaudio
+import PyAudio
 
 # Set up PyAudio
 audio = pyaudio.PyAudio()
