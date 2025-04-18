@@ -12,10 +12,12 @@ except ModuleNotFoundError:
 # GPIO Pin Definitions
 SELECT_BUTTON = 5    # GPIO 5: Select
 BACK_BUTTON = 6      # GPIO 6: Back
-UP_BUTTON = 1        # GPIO 1: Up
+UP_BUTTON = 4        # GPIO 1: Up
 RIGHT_BUTTON = 22    # GPIO 22: Right
 DOWN_BUTTON = 20     # GPIO 20: Down
 LEFT_BUTTON = 21     # GPIO 21: Left
+VOLUME_UP = 23       # GPIO 23: Volume up
+VOLUME_DOWN = 24     # GPIO 24: Volume down
 
 class ButtonFirmware:
     def __init__(self, menu_items, selected_index=0, callback=None):
@@ -36,6 +38,8 @@ class ButtonFirmware:
         GPIO.setup(RIGHT_BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
         GPIO.setup(DOWN_BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
         GPIO.setup(LEFT_BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        GPIO.setup(VOLUME_UP, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        GPIO.setup(VOLUME_DOWN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
     def button_callback(self, channel):
         """Handle button presses and update selected index."""
@@ -55,6 +59,10 @@ class ButtonFirmware:
             print(f"Right Button (GPIO 22) pressed - Selected: {self.menu_items[self.selected_index]['text']}")
         elif channel == LEFT_BUTTON:
             print("Left Button (GPIO 21) pressed - No action defined yet")
+        elif channel == VOLUME_DOWN:
+            print("Left Button (GPIO 24) pressed - No action defined yet")
+        elif channel == VOLUME_UP:
+            print("Left Button (GPIO 23) pressed - No action defined yet")
         else:
             print(f"Unexpected channel: {channel}")
         
@@ -70,6 +78,8 @@ class ButtonFirmware:
         GPIO.add_event_detect(RIGHT_BUTTON, GPIO.RISING, callback=self.button_callback, bouncetime=200)
         GPIO.add_event_detect(DOWN_BUTTON, GPIO.RISING, callback=self.button_callback, bouncetime=200)
         GPIO.add_event_detect(LEFT_BUTTON, GPIO.RISING, callback=self.button_callback, bouncetime=200)
+        GPIO.add_event_detect(VOLUME_UP, GPIO.RISING, callback=self.button_callback, bouncetime=200)
+        GPIO.add_event_detect(VOLUME_DOWN, GPIO.RISING, callback=self.button_callback, bouncetime=200)
         print("Button navigation active.")
 
     def cleanup(self):
