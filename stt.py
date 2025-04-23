@@ -16,7 +16,7 @@ CHUNK = 8000  # 512 #8000 original chunk size
 WIDTH = 2
 
 # Path for music folder (REPLACE WITH YOUR PATH BRENDEN, ensure you use / not \)
-MUSIC_FOLDER = '/home/Sara/RPI-Sara/code/DownloadedMusic/Music'
+MUSIC_FOLDER = 'Music'
 
 # Initialize Vosk model
 model = Model('vosk-model-small-en-us-0.15')
@@ -41,8 +41,8 @@ player = instance.media_player_new()
 tts_player = instance.media_player_new()  # Global player for text-to-speech
 
 # Define specific paths to avoid overlap
-NORMAL_MUSIC_PATH = os.path.join(MUSIC_FOLDER, "normal music").lower()
-NOT_SO_NORMAL_MUSIC_PATH = os.path.join(MUSIC_FOLDER, "not so normal music").lower()
+NORMAL_MUSIC_PATH = os.path.join(MUSIC_FOLDER).lower()
+#NOT_SO_NORMAL_MUSIC_PATH = os.path.join(MUSIC_FOLDER, "not so normal music").lower()
 
 # Load songs into separate playlists
 song_files = []
@@ -57,8 +57,8 @@ for root, dirs, files in os.walk(MUSIC_FOLDER):
 
             if path_lower.startswith(NORMAL_MUSIC_PATH):
                 normal_music_files.append(full_path)
-            elif path_lower.startswith(NOT_SO_NORMAL_MUSIC_PATH):
-                not_so_normal_music_files.append(full_path)
+            #elif path_lower.startswith(NOT_SO_NORMAL_MUSIC_PATH):
+            #    not_so_normal_music_files.append(full_path)
             elif "\\music\\" not in path_lower:  # Exclude anything under Music folder
                 song_files.append(full_path)
 
@@ -102,10 +102,10 @@ def play_song(song_name):
     song_name = song_name.strip().lower()
 
     # Reset playlist based on category
-    if "normal music" in song_name:
+    if "music" in song_name:
         playlist[:] = normal_music_files
-    elif "not so normal music" in song_name:
-        playlist[:] = not_so_normal_music_files
+    #elif "not so normal music" in song_name:
+    #    playlist[:] = not_so_normal_music_files
     elif song_name in ["", "music", "downloaded music", "playlist", "all songs"]:
         playlist[:] = song_files
 
