@@ -1,0 +1,39 @@
+{
+    "username": "bingbong1",
+    "head_width": 13.0,
+    "head_length": 15.0,
+    "effective_radius": 7.865,
+    "hrtf_subject": "003",
+    "timestamp": "2025-04-11 10:22:42",
+    "test_results": {
+        "actual_angles": [
+            -80,
+            -65,
+            -45,
+            -25,
+            -10,
+            0,
+            10,
+            25,
+            45,
+            65,
+            80
+        ],
+        "perceived_angles": [
+            0,
+            90,
+            90,
+            -90,
+            -90,
+            85,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "subject_ratings": {
+            "003": 5
+        }
+    }
+}

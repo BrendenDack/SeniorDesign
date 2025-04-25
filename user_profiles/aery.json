@@ -1,0 +1,27 @@
+{
+  "head_width": 14.2,
+  "head_length": 17.8,
+  "effective_radius": 3.2,
+  "hrtf_subject": "003",
+  "calibration_data": {
+    "preset_angles": [
+      -80,
+      80,
+      0,
+      45,
+      -45,
+      -30,
+      30
+    ],
+    "responses": [
+      -80,
+      80,
+      0,
+      45,
+      -45,
+      -30,
+      30
+    ]
+  },
+  "timestamp": "2025-04-19 14:22:12"
+}

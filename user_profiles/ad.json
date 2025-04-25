@@ -1,0 +1,45 @@
+{
+  "username": "ad",
+  "head_width": 13.0,
+  "head_length": 15.0,
+  "effective_radius": 7.865,
+  "hrtf_subject": "003",
+  "timestamp": "2025-04-12 12:06:59",
+  "test_results": {
+    "actual_angles": [
+      -80,
+      -65,
+      -45,
+      -25,
+      -10,
+      0,
+      10,
+      25,
+      45,
+      65,
+      80
+    ],
+    "perceived_angles": [
+      -90,
+      -75,
+      -45,
+      -30,
+      -15,
+      0,
+      10,
+      45,
+      70,
+      90,
+      90
+    ],
+    "subject_ratings": {
+      "003": 5
+    }
+  },
+  "stem_directions": {
+    "bass": 90,
+    "vocals": 0,
+    "guitar": 0,
+    "other": 0
+  }
+}
