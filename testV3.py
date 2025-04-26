@@ -33,29 +33,18 @@ def get_key() -> str:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     return ch
 
-def get_available_angles(hrtf_path: Path, subject: str) -> list:
-    """Load available angles for a subject from HRIR files."""
-    angles = []
-    for file in hrtf_path.glob(f"Subject_{subject}_*_0.mat"):
-        try:
-            angle = int(file.stem.split('_')[-2])
-            angles.append(angle)
-        except ValueError:
-            continue
-    return sorted(angles)
-
-def snap_to_nearest_angle(target: float, available_angles: list) -> float:
-    """Snap target angle to the nearest available angle."""
-    if not available_angles:
-        return target
-    return available_angles[np.argmin(np.abs(np.array(available_angles) - target))]
-
 def select_profile(profiles_dir: Path) -> dict:
     """Prompt user to select a valid profile from user_profiles using WASD."""
     profiles = sorted(profiles_dir.glob("*.json"))
     if not profiles:
         print("No profiles found in user_profiles/. Using default HRTF (Subject_003).")
-        return {"hrtf_subject": "003", "effective_radius": 8.5, "head_width": 15.2, "head_length": 19.0, "stem_directions": {"bass": 0, "vocals": 0, "drums": 0, "other": 0}}
+        return {
+            "hrtf_subject": "003",
+            "effective_radius": 8.5,
+            "head_width": 15.2,
+            "head_length": 19.0,
+            "stem_directions": {"bass": -80, "drums": 80, "other": -45, "vocals": 15}
+        }
 
     print("\nSelect a user profile (w/s to navigate, Enter to select):")
     selected_idx = 0
@@ -70,41 +59,68 @@ def select_profile(profiles_dir: Path) -> dict:
             try:
                 with open(profiles[selected_idx], 'r') as f:
                     profile_data = json.load(f)
-                if not all(k in profile_data for k in ['hrtf_subject', 'effective_radius']):
+                required_fields = ['hrtf_subject', 'effective_radius']
+                if not all(k in profile_data for k in required_fields):
                     print(f"Invalid profile {profiles[selected_idx].name}: Missing required fields.")
-                    return {"hrtf_subject": "003", "effective_radius": 8.5, "head_width": 15.2, "head_length": 19.0, "stem_directions": {"bass": 0, "vocals": 0, "drums": 0, "other": 0}}
+                    return {
+                        "hrtf_subject": "003",
+                        "effective_radius": 8.5,
+                        "head_width": 15.2,
+                        "head_length": 19.0,
+                        "stem_directions": {"bass": -80, "drums": 80, "other": -45, "vocals": 15}
+                    }
+                # Validate stem_directions
+                if 'stem_directions' not in profile_data or not isinstance(profile_data['stem_directions'], dict):
+                    print(f"Warning: 'stem_directions' missing or invalid in {profiles[selected_idx].name}. Using defaults.")
+                    profile_data['stem_directions'] = {"bass": -80, "drums": 80, "other": -45, "vocals": 15}
+                elif not all(stem in profile_data['stem_directions'] for stem in ['bass', 'drums', 'other', 'vocals']):
+                    print(f"Warning: 'stem_directions' incomplete in {profiles[selected_idx].name}. Using defaults for missing stems.")
+                    defaults = {"bass": -80, "drums": 80, "other": -45, "vocals": 15}
+                    for stem in ['bass', 'drums', 'other', 'vocals']:
+                        profile_data['stem_directions'].setdefault(stem, defaults[stem])
+                
                 print(f"\nSelected profile: {profiles[selected_idx].name}")
                 print(f"  HRTF Subject: {profile_data['hrtf_subject']} ({'Female' if profile_data['hrtf_subject'] == '019' else 'Male'})")
                 print(f"  Head Width: {profile_data.get('head_width', 15.2):.2f} cm")
                 print(f"  Head Length: {profile_data.get('head_length', 19.0):.2f} cm")
                 print(f"  Effective Radius: {profile_data['effective_radius']:.2f} cm")
+                print("  Stem Directions:")
+                for stem, angle in profile_data['stem_directions'].items():
+                    print(f"    {stem.capitalize()}: {angle}°")
                 return profile_data
             except json.JSONDecodeError:
                 print(f"Error: {profiles[selected_idx].name} is not a valid JSON file.")
-                return {"hrtf_subject": "003", "effective_radius": 8.5, "head_width": 15.2, "head_length": 19.0, "stem_directions": {"bass": 0, "vocals": 0, "drums": 0, "other": 0}}
+                return {
+                    "hrtf_subject": "003",
+                    "effective_radius": 8.5,
+                    "head_width": 15.2,
+                    "head_length": 19.0,
+                    "stem_directions": {"bass": -80, "drums": 80, "other": -45, "vocals": 15}
+                }
         elif ch.lower() == 'w' and selected_idx > 0:
             selected_idx -= 1
         elif ch.lower() == 's' and selected_idx < len(profiles) - 1:
             selected_idx += 1
 
-def HRTF(az, n, profile: dict, available_angles: list):
+def HRTF(az, n, profile: dict):
     subject = profile.get("hrtf_subject", "003")
     effective_radius = profile.get("effective_radius", 8.5)
-    az = int(snap_to_nearest_angle(az, available_angles))  # Snap to valid angle
     hrtf_path = Path(f"/home/advented/HRIRs/Subject_{subject}_{az}_0.mat")
     try:
         data = loadmat(str(hrtf_path))
-        if 'hrir_left' not in data or 'hrir_right' not in data:
-            raise KeyError("Missing hrir_left or hrir_right in HRIR file")
         hrir_left = data['hrir_left'].flatten()
         hrir_right = data['hrir_right'].flatten()
-    except (FileNotFoundError, KeyError) as e:
-        print(f"Error: HRTF file {hrtf_path} not found or invalid ({str(e)}). Using default Subject_003_0.")
-        hrtf_path = Path(f"/home/advented/HRIRs/Subject_003_0_0.mat")
-        data = loadmat(str(hrtf_path))
-        hrir_left = data['hrir_left'].flatten()
-        hrir_right = data['hrir_right'].flatten()
-        az = 0
+    except FileNotFoundError:
+        print(f"Error: HRTF file {hrtf_path} not found. Using default Subject_003.")
+        hrtf_path = Path(f"/home/advented/HRIRs/Subject_003_{az}_0.mat")
+        try:
+            data = loadmat(str(hrtf_path))
+            hrir_left = data['hrir_left'].flatten()
+            hrir_right = data['hrir_right'].flatten()
+        except FileNotFoundError:
+            print(f"Error: Default HRTF file {hrtf_path} not found. Using zero HRIR.")
+            hrir_left = np.zeros(512)
+            hrir_right = np.zeros(512)
     
     scale = effective_radius / 8.5
     hrir_left_len = len(hrir_left)
@@ -138,19 +154,27 @@ start_program = Time.perf_counter()
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 
-fs, data = read_wav_file("Original.wav", 44100)
+fs, data = read_wav_file("/home/advented/audioProductV1/projectCode/Original.wav", 44100)
 
 from openunmix import predict
+# Load umxl model explicitly for higher-quality source separation
+# change argument to umxhq ,for higher quality  
+#change argument to umxl for faster separation
+# Note: testing them..they seem to sound the same though hq just has less bleed and some better quality just not the best - can notice this the most in vocals
+separator = torch.hub.load('sigsep/open-unmix-pytorch', 'umxhq', device=device)
 estimates = predict.separate(
-    torch.as_tensor(data).float(),
+    audio=torch.as_tensor(data).float(),
     rate=fs,
-    device=device
+    device=device,
+    separator=separator
 )
 for target, estimate in estimates.items():
     print(target)
     audio = estimate.detach().cpu().numpy()[0]
     display(Audio(audio, rate=fs))
 
+original_fs = 44100
+duration = 0.2
 estimates_numpy = {}
 for target, estimate in estimates.items():
     estimates_numpy[target] = torch.squeeze(estimate).detach().cpu().numpy().T
@@ -158,47 +182,13 @@ for target, estimate in estimates.items():
 profiles_dir = Path("/home/advented/audioProductV1/projectCode/SeniorDesign/user_profiles")
 profile = select_profile(profiles_dir)
 
-# Validate stem_directions
-stems = ["bass", "vocals", "drums", "other"]
-if "stem_directions" not in profile or not all(s in profile["stem_directions"] for s in stems):
-    print("Warning: Invalid or missing stem_directions in profile. Using defaults (0°).")
-    profile["stem_directions"] = {s: 0 for s in stems}
-else:
-    # Ensure stem_directions are numeric
-    for s in stems:
-        try:
-            profile["stem_directions"][s] = float(profile["stem_directions"][s])
-        except (TypeError, ValueError):
-            print(f"Warning: Invalid angle for {s} ({profile['stem_directions'][s]}). Using 0°.")
-            profile["stem_directions"][s] = 0
-
-# Load available angles for the subject
-hrtf_path = Path("/home/advented/HRIRs/")
-subject = profile.get("hrtf_subject", "003")
-available_angles = get_available_angles(hrtf_path, subject)
-if not available_angles:
-    print(f"Warning: No HRIR files found for Subject_{subject}. Using default angles.")
-    available_angles = [0]
-
-# Snap stem directions and check for large errors
-stem_angles = {}
-for s in stems:
-    target_angle = profile["stem_directions"][s]
-    snapped_angle = snap_to_nearest_angle(target_angle, available_angles)
-    if abs(target_angle - snapped_angle) > 10:
-        print(f"Warning: Large snapping error for {s}: {target_angle}° → {snapped_angle}°. Consider adjusting in editProfiles.py.")
-    stem_angles[s] = snapped_angle
-
-# Print applied angles
-print("\nApplying stem directions:")
-for s in stems:
-    print(f"  {s.capitalize()}: {stem_angles[s]:.1f}°")
-
 start = Time.perf_counter()
-modified_bass = HRTF(stem_angles["bass"], Stereo_to_mono(estimates_numpy["bass"]), profile, available_angles)
-modified_drums = HRTF(stem_angles["drums"], Stereo_to_mono(estimates_numpy["drums"]), profile, available_angles)
-modified_other = HRTF(stem_angles["other"], Stereo_to_mono(estimates_numpy["other"]), profile, available_angles)
-modified_vocals = HRTF(stem_angles["vocals"], Stereo_to_mono(estimates_numpy["vocals"]), profile, available_angles)
+# Use stem_directions angles from profile
+stem_directions = profile['stem_directions']
+modified_bass = HRTF(stem_directions['bass'], Stereo_to_mono(estimates_numpy['bass']), profile)
+modified_drums = HRTF(stem_directions['drums'], Stereo_to_mono(estimates_numpy['drums']), profile)
+modified_other = HRTF(stem_directions['other'], Stereo_to_mono(estimates_numpy['other']), profile)
+modified_vocals = HRTF(stem_directions['vocals'], Stereo_to_mono(estimates_numpy['vocals']), profile)
 end = Time.perf_counter()
 
 Total_time = end - start
