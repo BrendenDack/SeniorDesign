@@ -13,10 +13,10 @@ sys.path.append("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/mp"
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 try:
-    from firmware import button_firmware
+    from firmware.button_firmware import setup_button_firmware
     from lib.LCD_2inch4 import LCD_2inch4
-    import chat_libraryV2
-    import chat_musicplayer
+    from library import chat_libraryV2
+    from mp import chat_musicplayer
 except ImportError as e:
     logging.error("Failed to import module: %s", e)
     sys.exit(1)
@@ -151,8 +151,13 @@ try:
     update_display(img)
 
     # Setup button firmware
-    bf = button_firmware(MENU_ITEMS, selected_index=SELECTED_INDEX, callback=custom_callback)
-    bf.start()
+    try:
+        bf = setup_button_firmware(MENU_ITEMS, selected_index=SELECTED_INDEX, callback=custom_callback)
+        logging.debug("Button firmware initialized")
+        bf.start()
+    except Exception as e:
+        logging.error("Failed to initialize button firmware: %s", e)
+        sys.exit(1)
 
     # Main loop
     try:
