@@ -214,6 +214,7 @@ def restore_volume():
     player.audio_set_volume(NORMAL_VOLUME)
     print("Volume restored to", NORMAL_VOLUME)
 
+#def start_voice_recognition(): TAB EVERYTHING BELOW SO NO ERRORS. 
 print("Listening for 'Hey Music' command... Press Ctrl+C to stop.")
 
 try:
