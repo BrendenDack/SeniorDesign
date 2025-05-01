@@ -10,7 +10,7 @@ import tempfile
 from gtts import gTTS  # SPEECH TO TEXT
 
 # Audio Parameters
-RATE = 16000  # 48000 #44100 replace #16000 original rate used 
+RATE = 48000  # 48000 #44100 replace #16000 original rate used 
 CHANNELS = 1
 CHUNK = 8000  # 512 #8000 original chunk size
 WIDTH = 2
@@ -217,6 +217,7 @@ def restore_volume():
 def start_voice_recognition():
 
     print("Listening for 'Hey Music' command... Press Ctrl+C to stop.")
+    speak("Hello! Say Hey Music to continue!")
 
     try:
         while True:
@@ -263,7 +264,11 @@ def start_voice_recognition():
                             speak("Sorry, I didn't understand that.")
                         break
                 restore_volume()  # Restore volume after command processing
-                print("Listening for 'Hey Music' command...")
+                # stream.stop_stream()
+                # stream.close()
+                # audio.terminate()
+                #return
+                #print("Listening for 'Hey Music' command...")
 
             if player.get_state() == vlc.State.Ended and playlist:
                 if loop:

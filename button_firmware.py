@@ -15,8 +15,8 @@ except ModuleNotFoundError:
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # GPIO Pin Definitions
-SELECT_BUTTON = 13   # GPIO 13: Select
-BACK_BUTTON = 6      # GPIO 6: Back
+SELECT_BUTTON = 26   # GPIO 13: Select
+BACK_BUTTON = 16      # GPIO 6: Back
 UP_BUTTON = 4        # GPIO 4: Up
 RIGHT_BUTTON = 22    # GPIO 22: Right
 DOWN_BUTTON = 20     # GPIO 20: Down
@@ -46,6 +46,7 @@ class ButtonFirmware:
             GPIO.setmode(GPIO.BCM)
             GPIO.setwarnings(False)
             for pin in [SELECT_BUTTON, BACK_BUTTON, UP_BUTTON, RIGHT_BUTTON, DOWN_BUTTON, LEFT_BUTTON, VOLUME_UP, VOLUME_DOWN]:
+                print(f"{pin} is causing error")
                 GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
         except Exception as e:
             logging.error("Failed to setup GPIO: %s", e)
@@ -72,9 +73,10 @@ class ButtonFirmware:
         elif channel == BACK_BUTTON:
             logging.info("Back Button (GPIO %d) pressed - Triggering Voice Recognition", BACK_BUTTON)
             #Run the voice recognition in a seperate thread
-            recognition_thread = threading.Thread(target=start_voice_recognition)
-            recognition_thread.daemon=True # Daemonize the thread to allow it to exit with the main program
-            recognition_thread.start() # Start the recognition process
+            #recognition_thread = threading.Thread(target=start_voice_recognition)
+            #recognition_thread.daemon=True # Daemonize the thread to allow it to exit with the main program
+            #recognition_thread.start() # Start the recognition process
+            print("I'm working I promise")
         elif channel == RIGHT_BUTTON:
             logging.debug("Right Button (GPIO %d) pressed", RIGHT_BUTTON)
         elif channel == LEFT_BUTTON:
