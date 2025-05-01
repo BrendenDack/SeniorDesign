@@ -16,7 +16,7 @@ CHUNK = 8000  # 512 #8000 original chunk size
 WIDTH = 2
 
 # Path for music folder (REPLACE WITH YOUR PATH BRENDEN, ensure you use / not \)
-MUSIC_FOLDER = '/home/Sara/RPI-Sara/code/DownloadedMusic/Music'
+MUSIC_FOLDER = 'SaraCode/SeniorDesign/Music'
 
 # Initialize Vosk model
 model = Model('vosk-model-small-en-us-0.15')
