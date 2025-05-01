@@ -3,6 +3,8 @@
 import sys
 import time
 import logging
+import threading
+from stt import Start_voice_recognition
 try:
     import RPi.GPIO as GPIO
 except ModuleNotFoundError:
@@ -68,7 +70,11 @@ class ButtonFirmware:
         elif channel == SELECT_BUTTON:
             logging.info("Select Button (GPIO %d) pressed - Selected: %s", SELECT_BUTTON, item_name)
         elif channel == BACK_BUTTON:
-            logging.info("Back Button (GPIO %d) pressed", BACK_BUTTON)
+            logging.info("Back Button (GPIO %d) pressed - Triggering Voice Recognition", BACK_BUTTON)
+            #Run the voice recognition in a seperate thread
+            recognition_thread = threading.Thread(target=Start_voice_recognition)
+            recognition_thread.daemon=True # Daemonize the thread to allow it to exit with the main program
+            recognition_thread.start() # Start the recognition process
         elif channel == RIGHT_BUTTON:
             logging.debug("Right Button (GPIO %d) pressed", RIGHT_BUTTON)
         elif channel == LEFT_BUTTON:
