@@ -7,20 +7,23 @@ import vlc
 import os
 import time
 import tempfile 
+import sys
 from gtts import gTTS  # SPEECH TO TEXT
 
 # Audio Parameters
-RATE = 48000  # 48000 #44100 replace #16000 original rate used 
+RATE = 16000  # 48000 #44100 replace #16000 original rate used 
 CHANNELS = 1
 CHUNK = 8000  # 512 #8000 original chunk size
 WIDTH = 2
 
 # Path for music folder (REPLACE WITH YOUR PATH BRENDEN, ensure you use / not \)
-MUSIC_FOLDER = 'SaraCode/SeniorDesign/Music'
+MUSIC_FOLDER = 'RPI-Sara/code/Music'
 
 # Initialize Vosk model
 model = Model('vosk-model-small-en-us-0.15')
 rec = KaldiRecognizer(model, RATE)
+
+
 
 # Initialize PyAudio
 audio = pyaudio.PyAudio()
@@ -215,7 +218,19 @@ def restore_volume():
     print("Volume restored to", NORMAL_VOLUME)
 
 def start_voice_recognition():
-
+    global player, playlist
+    # Initialize PyAudio
+    audio = pyaudio.PyAudio()
+    try:
+        stream = audio.open(format=audio.get_format_from_width(WIDTH),
+                        channels=CHANNELS,
+                        rate=RATE,
+                        input=True,
+                        # input_device_index=input_device_index,
+                        frames_per_buffer=CHUNK)
+    except OSError as e:
+        print(f"Error opening audio stream: {e}")
+        return
     print("Listening for 'Hey Music' command... Press Ctrl+C to stop.")
     speak("Hello! Say Hey Music to continue!")
 
@@ -260,6 +275,9 @@ def start_voice_recognition():
                             toggle_loop()
                         elif "shuffle" in command:
                             toggle_shuffle()
+                        elif "stop" in command:
+                            print("Stopping")
+                            sys.exit()
                         else:
                             speak("Sorry, I didn't understand that.")
                         break
@@ -293,3 +311,5 @@ def start_voice_recognition():
             print("Stream was already closed or not properly opened")
         audio.terminate()
         player.stop()
+
+#start_voice_recognition()
