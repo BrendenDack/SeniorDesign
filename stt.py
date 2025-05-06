@@ -7,6 +7,7 @@ import vlc
 import os
 import time
 import tempfile 
+import sys
 from gtts import gTTS  # SPEECH TO TEXT
 
 # Audio Parameters
@@ -16,11 +17,13 @@ CHUNK = 8000  # 512 #8000 original chunk size
 WIDTH = 2
 
 # Path for music folder (REPLACE WITH YOUR PATH BRENDEN, ensure you use / not \)
-MUSIC_FOLDER = '/home/Sara/RPI-Sara/code/DownloadedMusic/Music'
+MUSIC_FOLDER = 'RPI-Sara/code/Music'
 
 # Initialize Vosk model
 model = Model('vosk-model-small-en-us-0.15')
 rec = KaldiRecognizer(model, RATE)
+
+
 
 # Initialize PyAudio
 audio = pyaudio.PyAudio()
@@ -214,75 +217,99 @@ def restore_volume():
     player.audio_set_volume(NORMAL_VOLUME)
     print("Volume restored to", NORMAL_VOLUME)
 
-print("Listening for 'Hey Music' command... Press Ctrl+C to stop.")
-
-try:
-    while True:
-        try:
-            data = stream.read(CHUNK, exception_on_overflow=False)  # Prevent overflow crash
-        except IOError as e:
-            print(f"Overflow error: {e}. Restarting stream...")
-            stream.stop_stream()
-            stream.start_stream()
-            continue
-
-        if detect_wake_word(data):
-            print("'Hey Music' detected. Listening for command...")
-            speak("Yes?")
-            lower_volume()  # Lower volume when wake word detected
-
-            while True:
-                try:
-                    data = stream.read(CHUNK, exception_on_overflow=False)
-                except IOError as e:
-                    print(f"Overflow error: {e}. Restarting stream...")
-                    stream.stop_stream()
-                    stream.start_stream()
-                    continue
-
-                command = recognize_command(data)
-                if command:
-                    if "play" in command:
-                        song_name = command.replace("play", "").strip()
-                        play_song(song_name)
-                    elif "pause" in command:
-                        pause_song()
-                    elif "resume" in command:
-                        resume_song()
-                    elif "next" in command:
-                        next_song()
-                    elif "previous" in command:
-                        previous_song()
-                    elif "loop" in command:
-                        toggle_loop()
-                    elif "shuffle" in command:
-                        toggle_shuffle()
-                    else:
-                        speak("Sorry, I didn't understand that.")
-                    break
-            restore_volume()  # Restore volume after command processing
-            print("Listening for 'Hey Music' command...")
-
-        if player.get_state() == vlc.State.Ended and playlist:
-            if loop:
-                song_path = playlist[current_index]
-                media = instance.media_new(song_path)
-                player.set_media(media)
-                player.play()
-            else:
-                next_song()
-
-        time.sleep(0.5)
-
-except KeyboardInterrupt:
-    print("Stopped by user")
-except OSError as e:
-    print(f"Stream error: {e}")
-finally:
+def start_voice_recognition():
+    global player, playlist
+    # Initialize PyAudio
+    audio = pyaudio.PyAudio()
     try:
-        stream.stop_stream()
-        stream.close()
-    except OSError:
-        print("Stream was already closed or not properly opened")
-    audio.terminate()
-    player.stop()
+        stream = audio.open(format=audio.get_format_from_width(WIDTH),
+                        channels=CHANNELS,
+                        rate=RATE,
+                        input=True,
+                        # input_device_index=input_device_index,
+                        frames_per_buffer=CHUNK)
+    except OSError as e:
+        print(f"Error opening audio stream: {e}")
+        return
+    print("Listening for 'Hey Music' command... Press Ctrl+C to stop.")
+    speak("Hello! Say Hey Music to continue!")
+
+    try:
+        while True:
+            try:
+                data = stream.read(CHUNK, exception_on_overflow=False)  # Prevent overflow crash
+            except IOError as e:
+                print(f"Overflow error: {e}. Restarting stream...")
+                stream.stop_stream()
+                stream.start_stream()
+                continue
+
+            if detect_wake_word(data):
+                print("'Hey Music' detected. Listening for command...")
+                speak("Yes?")
+                lower_volume()  # Lower volume when wake word detected
+
+                while True:
+                    try:
+                        data = stream.read(CHUNK, exception_on_overflow=False)
+                    except IOError as e:
+                        print(f"Overflow error: {e}. Restarting stream...")
+                        stream.stop_stream()
+                        stream.start_stream()
+                        continue
+
+                    command = recognize_command(data)
+                    if command:
+                        if "play" in command:
+                            song_name = command.replace("play", "").strip()
+                            play_song(song_name)
+                        elif "pause" in command:
+                            pause_song()
+                        elif "resume" in command:
+                            resume_song()
+                        elif "next" in command:
+                            next_song()
+                        elif "previous" in command:
+                            previous_song()
+                        elif "loop" in command:
+                            toggle_loop()
+                        elif "shuffle" in command:
+                            toggle_shuffle()
+                        elif "stop" in command:
+                            print("Stopping")
+                            sys.exit()
+                        else:
+                            speak("Sorry, I didn't understand that.")
+                        break
+                restore_volume()  # Restore volume after command processing
+                # stream.stop_stream()
+                # stream.close()
+                # audio.terminate()
+                #return
+                #print("Listening for 'Hey Music' command...")
+
+            if player.get_state() == vlc.State.Ended and playlist:
+                if loop:
+                    song_path = playlist[current_index]
+                    media = instance.media_new(song_path)
+                    player.set_media(media)
+                    player.play()
+                else:
+                    next_song()
+
+            time.sleep(0.5)
+
+    except KeyboardInterrupt:
+        print("Stopped by user")
+    except OSError as e:
+        print(f"Stream error: {e}")
+    finally:
+        try:
+            stream.stop_stream()
+            stream.close()
+        except OSError:
+            print("Stream was already closed or not properly opened")
+        audio.terminate()
+        player.stop()
+
+#start_voice_recognition()

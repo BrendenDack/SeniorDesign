@@ -15,6 +15,9 @@ HRTF_PATH = "HRIRs/"  # Path to HRTF files
 PROFILES_DIR = Path("user_profiles")
 PROFILES_DIR.mkdir(exist_ok=True)
 
+def clear_console(): # For manually clearing the console
+    os.system('cls' if os.name == 'nt' else 'clear')
+
 def generate_white_noise(duration, fs):
     """Generate white noise signal."""
     return np.random.normal(0, 0.5, int(duration * fs))
@@ -207,9 +210,9 @@ def run_calibration():
     print(f"\nProfile saved as {profile_path}")
     
     # Visualization
-    plot_results(profile)
+    #plot_results(profile)
     
-    return profile
+    return (f"Your profile ID is: {profile['username']}")
 
 def plot_results(profile):
     """Plot calibration results for visualization."""
@@ -243,10 +246,12 @@ def plot_results(profile):
     print(f"Results visualization saved")
 
 def main():
+    clear_console()
     profile = run_calibration()
     print("\nCalibration complete!")
     print(f"Your profile ID is: {profile['username']}")
     print("You can now run test.py with your calibrated profile.")
+    time.sleep(5)
 
 if __name__ == "__main__":
     main()
