@@ -5,6 +5,8 @@ from datetime import datetime
 from menu_config import MENUS
 from music_loader import load_music_files, CURRENT_PAGE, ALL_MUSIC_FILES
 from action_handlers import FUNCTION_DICTIONARY
+import subprocess
+import time
 
 # Add parent directory to sys.path for external modules
 sys.path.append("../")

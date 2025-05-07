@@ -2,6 +2,7 @@
 from gpiozero import Button
 from gpiozero.exc import GPIOZeroError
 from action_handlers import FUNCTION_DICTIONARY
+import time
 
 class ButtonManager:
     def __init__(self):
