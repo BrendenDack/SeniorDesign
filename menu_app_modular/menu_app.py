@@ -1,4 +1,5 @@
 import curses
+import time
 from button_manager import ButtonManager
 from menu_renderer import MenuRenderer
 

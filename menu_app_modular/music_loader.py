@@ -1,5 +1,6 @@
 # music_loader.py
 import os
+import time
 from menu_config import MENUS  # Import menus for updating
 
 ALL_MUSIC_FILES = []

@@ -1,10 +1,20 @@
-# menu_renderer.py
 import curses
 import sys
+import logging
+import subprocess
+import time
 from datetime import datetime
 from menu_config import MENUS
 from music_loader import load_music_files, CURRENT_PAGE, ALL_MUSIC_FILES
 from action_handlers import FUNCTION_DICTIONARY
+
+# Setup logging to file
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    filename='menu_renderer.log',
+    filemode='w'
+)
 
 # Add parent directory to sys.path for external modules
 sys.path.append("../")
@@ -14,39 +24,48 @@ try:
 except ModuleNotFoundError:
     def get_battery_info():
         return ("Unknown", 0)  # Fallback: unknown status, 0%
-    print("Warning: 'battery_monitor' module not found. Battery info disabled.")
+    logging.warning("battery_monitor module not found. Battery info disabled.")
 
 class MenuRenderer:
     def __init__(self):
         self.menu_stack = ["main"]
         self.current_index = 0
         self.selected_song = None
+        self.initialized = 0  # Count cycles
+        logging.info(f"MenuRenderer initialized, menu_stack={self.menu_stack}")
+        time.sleep(0.5)  # Stabilize GPIO
 
     def handle_selection(self, stdscr, selected_option, h, w, current_menu_key):
         label = selected_option["label"]
         target = selected_option.get("target")
         action = selected_option.get("action")
         action_type = selected_option.get("action_type", "shell")
+        logging.debug(f"handle_selection: menu_stack={self.menu_stack}, current_menu_key={current_menu_key}, selected_option={selected_option}")
 
         if target == "back":
             if len(self.menu_stack) > 1:
                 self.menu_stack.pop()
                 self.current_index = 0
+                logging.info("Navigated back")
         elif target == "next_page":
             load_music_files(CURRENT_PAGE + 1)
             self.current_index = 0
+            logging.info("Next page loaded")
         elif target == "prev_page":
             load_music_files(CURRENT_PAGE - 1)
             self.current_index = 0
+            logging.info("Previous page loaded")
         elif target and target in MENUS:
             if selected_option.get("action_type") == "dynamic" and target == "submenu_songs":
                 load_music_files(page=0)
             self.menu_stack.append(target)
             self.current_index = 0
+            logging.info(f"Navigated to menu: {target}")
         elif current_menu_key == "submenu_songs" and label.lower() not in ["next page", "previous page", "back"]:
             self.selected_song = label
             self.menu_stack.append("submenu_song_options")
             self.current_index = 0
+            logging.info(f"Selected song: {label}")
         elif action:
             if action_type == "shell":
                 try:
@@ -87,6 +106,7 @@ class MenuRenderer:
                     pass
             stdscr.refresh()
             time.sleep(2)
+            logging.info(f"Action executed: {action}")
         else:
             stdscr.clear()
             message = f"You selected: {label}"
@@ -98,6 +118,7 @@ class MenuRenderer:
                 pass
             stdscr.refresh()
             time.sleep(1)
+            logging.info(f"Displayed selection: {label}")
 
     def draw_menu(self, stdscr, button_manager):
         curses.curs_set(0)
@@ -105,23 +126,28 @@ class MenuRenderer:
         stdscr.keypad(True)
         curses.start_color()
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_CYAN)
+        logging.info("Starting draw_menu loop")
+
+        # Clear keyboard buffer
+        while stdscr.getch() != -1:
+            pass
 
         while True:
             stdscr.clear()
             h, w = stdscr.getmaxyx()
+            current_menu_key = self.menu_stack[-1]
+            current_menu = MENUS[current_menu_key]
+            title = current_menu["title"]
+            logging.debug(f"draw_menu: menu_stack={self.menu_stack}, current_menu_key={current_menu_key}, title={title}, initialized={self.initialized}")
 
             now = datetime.now()
             time_str = now.strftime("%I:%M:%S %p")
             stdscr.addstr(0, w - len(time_str) - 1, time_str)
             battery = get_battery_info()
-            battery_str = f"{battery[1]}% {battery[0]}"
+            battery_str = str(battery[0])
             stdscr.addstr(1, w - len(battery_str) - 1, battery_str)
 
-            current_menu_key = self.menu_stack[-1]
-            current_menu = MENUS[current_menu_key]
             options = current_menu["options"]
-            title = current_menu["title"]
-
             stdscr.addstr(1, w // 2 - len(title) // 2, title, curses.A_BOLD)
 
             for idx, option in enumerate(options):
@@ -136,22 +162,37 @@ class MenuRenderer:
                     stdscr.addstr(y, x, label)
 
             stdscr.refresh()
+            logging.debug("GUI refreshed")
+
+            if self.initialized < 20:  # Skip inputs for ~1s (20 cycles at 0.05s)
+                self.initialized += 1
+                logging.info(f"Skipping input handling, cycle {self.initialized}")
+                time.sleep(0.05)
+                continue
 
             try:
                 key = stdscr.getch()
-            except Exception:
+                logging.debug(f"Key pressed: {key}")
+            except Exception as e:
                 key = -1
+                logging.error(f"Error reading key: {e}")
 
             if key == curses.KEY_UP:
                 self.current_index = (self.current_index - 1) % len(options)
+                logging.info(f"Keyboard UP: current_index={self.current_index}")
             elif key == curses.KEY_DOWN:
                 self.current_index = (self.current_index + 1) % len(options)
+                logging.info(f"Keyboard DOWN: current_index={self.current_index}")
             elif key in [curses.KEY_ENTER, ord('\n'), ord('\r')]:
                 selected_option = options[self.current_index]
                 self.handle_selection(stdscr, selected_option, h, w, current_menu_key)
+                logging.info("Keyboard ENTER: selection handled")
             elif key in [curses.KEY_BACKSPACE, 127]:
                 FUNCTION_DICTIONARY["start_voice"]()
+                logging.info("Keyboard BACKSPACE: start_voice triggered")
 
+            logging.debug(f"Before handle_input: menu_stack={self.menu_stack}")
             self.current_index = button_manager.handle_input(self.current_index, options, current_menu_key, stdscr, h, w, self)
+            logging.debug(f"After handle_input: menu_stack={self.menu_stack}")
 
             time.sleep(0.05)
