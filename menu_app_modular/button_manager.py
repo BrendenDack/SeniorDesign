@@ -4,6 +4,7 @@ import time
 from gpiozero import Button
 from gpiozero.exc import GPIOZeroError
 from action_handlers import FUNCTION_DICTIONARY
+import time
 
 # Setup logging to file
 logging.basicConfig(

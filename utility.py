@@ -1,5 +1,4 @@
 import numpy as np
-import librosa
 from scipy.io import loadmat, wavfile
 from scipy.signal import lfilter, resample
 import torch
@@ -9,7 +8,7 @@ from battery_monitor import get_battery_info, is_charging
 from calibrateUserProfile import apply_hrtf
 from pydub import AudioSegment
 import os
-import soundfile as sf
+import pickle
 
 global volume
 volume = 1
@@ -143,10 +142,28 @@ def Spacial_Audio_Separation(file_name):
     return summed_song
 
 def run_spatial_audio(file_name):
-    print("Starting process")
     test_angles = [-80, -65, -45, -25, -10, 0, 10, 25, 45, 65, 80] # This should be user defined angles
     test_subject = "003" # This will also be read from the json files
-    estimates_numpy = separate_sources(file_name)
+    print("Starting process")
+    only_file_name = os.path.relpath(file_name, "Music")
+    print(file_name)
+    name_only, ext = os.path.splitext(only_file_name)
+    print(name_only)
+    output_filepath = "Spatial/" + name_only + ".pkl"
+    print(output_filepath)
+    if os.path.exists(output_filepath):
+        print("attempting to load pickle file")
+        with open(output_filepath, 'rb') as f:
+            estimates_numpy = pickle.load(f)
+    else:
+        print("No pickle file: Starting Seperation")
+        
+        estimates_numpy = separate_sources(file_name)
+
+        print("Trying to save pickle file")
+        # Save stems to pickle file
+        with open(f'Spatial/{name_only}.pkl', 'wb') as f:
+            pickle.dump(estimates_numpy, f)
     print("Separated")
     vocals = apply_hrtf(estimates_numpy['vocals'], test_angles[0], test_subject)
     drums = apply_hrtf(estimates_numpy['drums'], test_angles[3], test_subject)
@@ -155,6 +172,21 @@ def run_spatial_audio(file_name):
     print("Converted to 3D")
     summed_song = summed_signal(vocals, bass, drums, other)
     print("Recombined")
-    #sf.write(f"Output/{file_name}", summed_song, samplerate=44100, format='Flac')
-    #print("Saved to disk")
     return "Song successfully converted."
+
+def apply_bulk_hrtf(estimates_numpy):
+    test_angles = [-80, -65, -45, -25, -10, 0, 10, 25, 45, 65, 80] # This should be user defined angles
+    test_subject = "003" # This will also be read from the json files
+    print("Create Stems dict")
+    spacial_stems = {'vocals' : 0, 'drums' : 0, 'bass' : 0, 'other' : 0}
+    print("Vocals")
+    spacial_stems['vocals'] = apply_hrtf(estimates_numpy['vocals'], test_angles[0], test_subject)
+    print("drums")
+    spacial_stems['drums'] = apply_hrtf(estimates_numpy['drums'], test_angles[3], test_subject)
+    print("bass")
+    spacial_stems['bass'] = apply_hrtf(estimates_numpy['bass'], test_angles[7], test_subject)
+    print("other")
+    spacial_stems['other'] = apply_hrtf(estimates_numpy['other'], test_angles[10], test_subject)
+    print("Finished HRTFS")
+    
+    return spacial_stems
