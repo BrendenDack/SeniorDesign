@@ -3,6 +3,7 @@ import os
 import curses
 import subprocess
 import time
+import pickle
 from gpiozero import Button
 import gpiozero as gpio
 from gpiozero.pins.mock import MockFactory
@@ -10,9 +11,10 @@ from gpiozero.exc import GPIOZeroError
 import threading
 from stt import start_voice_recognition, play_song
 from calibrateUserProfile import run_calibration
-from utility import run_spatial_audio
+from utility import run_spatial_audio, apply_bulk_hrtf, summed_signal
 from datetime import datetime
 from battery_monitor import get_battery_info
+import soundfile as sf
 
 
 # This is a module in gpiozero that lets us use "pretend" buttons so I can test without it crashing
@@ -45,6 +47,7 @@ selected_song = None
 current_page = 0
 items_per_page = 5
 all_music_files = []
+directory = None
 # For Speech to Text
 recognition_thread = None
 recognition_running = False
@@ -63,7 +66,7 @@ menus = {
         "title": "Library",
         "options": [
             {"label": "Song List", "target": "submenu_songs", "action_type" : "dynamic"},
-            # {"label": "Apply Spatial Audio", "target": "submenu_songs_spatial", "action_type" : "dynamic"},
+            {"label": "Spatial Audio List", "target": "submenu_spatial_songs", "action_type" : "dynamic"},
             {"label": "Back", "target": "back"}
         ]
     },
@@ -74,11 +77,26 @@ menus = {
             {"label": "Back", "target": "back"}
         ]
     },
+    "submenu_spatial_songs": {
+        "title": "Spatial Songs",
+        "options": [
+            {"label": "Songs", "target": None},
+            {"label": "Back", "target": "back"}
+        ]
+    },
     "submenu_song_options": {
     "title": "Song Options",
     "options": [  # These will be updated dynamically when entering the menu
         {"label": "Play Song", "target": None, "action_type": "python", "action": "play_song"},
         {"label": "Apply Spatial Audio", "target": None, "action": "apply_spatial_audio", "action_type": "python"},
+        {"label": "Back", "target": "back"}
+    ]
+    },
+    "submenu_spatial_options": {
+    "title": "Spatial Song Options",
+    "options": [  # These will be updated dynamically when entering the menu
+        {"label": "Play Spatial Song", "target": None, "action": "play_spatial_song", "action_type": "python"},
+        {"label": "Play Stems", "target": None, "action": "play_spatial_song", "action_type": "python"},
         {"label": "Back", "target": "back"}
     ]
     },
@@ -107,18 +125,47 @@ def play_selected_song():
     else:
         print("No song selected")
 
+def play_spatial_song():
+    print("Check if pickle file exists")
+    if selected_song and os.path.exists(f"Spatial/{selected_song}"):
+        print("Attempt to load pickle file")
+        with open(f"Spatial/{selected_song}", 'rb') as f:
+            stems = pickle.load(f)
+            print(stems)
+        print("Apply HRTFs")
+        spatial_stems = apply_bulk_hrtf(stems)
+        print("Generate summed song")
+        final_output = summed_signal(spatial_stems['vocals'], spatial_stems['bass'], spatial_stems['other'], spatial_stems['drums'])
+        print("Write Stems to flac")
+        sf.write('Spatial/output.flac', final_output, 44100)
+        print("Play stems with ffmpeg")
+        subprocess.run(f'ffplay -nodisp -autoexit "Spatial/output.flac"', shell=True)
+        try:
+            os.remove('Spatial/output.flac')   
+            print("File removed.")
+        except FileNotFoundError:
+            print("File not found.")
+        except PermissionError:
+            print("No permission to delete the file.")
+
+
+
 # Function for loading music files dynamically into pages
-def load_music_files(page=0):
+def load_music_files(directory="Music", page=0):
     # Global Variables
     global all_music_files, current_page
 
-    music_folder = "Music" # Path to music folder
+    music_folder = directory # Path to music folder
     try:
         files = os.listdir(music_folder) # Load folder
-        mp3s = sorted([f for f in files if f.lower().endswith(".mp3")]) # Sort for .mp3
-        flac = sorted([f for f in files if f.lower().endswith(".flac")]) # Sort for .flac
-        wav = sorted([f for f in files if f.lower().endswith(".wav")]) # Sort for .wav
-        all_music_files = sorted(mp3s + flac + wav)
+        if directory == "Music":
+            mp3s = sorted([f for f in files if f.lower().endswith(".mp3")]) # Sort for .mp3
+            flac = sorted([f for f in files if f.lower().endswith(".flac")]) # Sort for .flac
+            wav = sorted([f for f in files if f.lower().endswith(".wav")]) # Sort for .wav
+            all_music_files = sorted(mp3s + flac + wav)
+        elif directory == "Spatial":
+            pkl = sorted([f for f in files if f.lower().endswith(".pkl")]) # Sort for .pkl
+            all_music_files = pkl
         current_page = page # Select starting page from parameter variable
 
         # Determine how many songs to put per page. Adjustable from global variable "items_per_page"
@@ -134,15 +181,17 @@ def load_music_files(page=0):
             options.append({"label": "Previous Page", "target": "prev_page"})
         
         # Determine if Next Page button is shown
-        if end < len(mp3s):
+        if end < len(all_music_files):
             options.append({"label": "Next Page", "target": "next_page"})
 
         # Back button to leave library added to end
         options.append({"label": "Back", "target": "back"})
-
-        menus["submenu_songs"]["options"] = options
+        if directory == "Music":
+            menus["submenu_songs"]["options"] = options
+        elif directory == "Spatial":
+            menus["submenu_spatial_songs"]["options"] = options
     except Exception as e:
-        menus["submenu_songs"]["options"] = [
+        menus["submenu_spatial_songs"]["options"] = [
             {"label": f"Error loading files: {e}", "target": "back"},
             {"label": "Back", "target": "back"}
         ]
@@ -185,12 +234,13 @@ function_dictionary = {
     "start_voice" : start_voice,
     "play_song" : play_selected_song,
     "run_calibration" : run_calibration,
-    "apply_spatial_audio" : run_spatial_audio_helper
+    "apply_spatial_audio" : run_spatial_audio_helper,
+    "play_spatial_song" : play_spatial_song
 }
 
 def handle_selection(stdscr, selected_option, h, w, current_menu_key):
     # Global variable
-    global current_index
+    global current_index, directory
     # Load labels, targets, and actions
     label = selected_option["label"] # Labels are just the name of the option, it's what shows on the screen
     target = selected_option.get("target") # Targets decide where the selection goes next, can be None
@@ -204,15 +254,19 @@ def handle_selection(stdscr, selected_option, h, w, current_menu_key):
             current_index = 0
     # Next_page and prev_page are specifically for menus where it dynamically loads content into "pages"
     elif target == "next_page": # Move forward a page
-        load_music_files(current_page + 1)
+        load_music_files(directory, current_page + 1)
         current_index = 0
     elif target == "prev_page": # Move back a page
-        load_music_files(current_page - 1)
+        load_music_files(directory, current_page - 1)
         current_index = 0
     elif target and target in menus: # If there are no pages, check the target and go there
     # Check if we need to generate the submenu dynamically
         if selected_option.get("action_type") == "dynamic" and target == "submenu_songs":
-            load_music_files(page=0)
+            directory = "Music"
+            load_music_files(directory, page=0)
+        if selected_option.get("action_type") == "dynamic" and target == "submenu_spatial_songs":
+            directory = "Spatial"
+            load_music_files(directory, page=0)
         menu_stack.append(target)
         current_index = 0
     elif current_menu_key == "submenu_songs" and label.lower() not in ["next page", "previous page", "back"]:
@@ -220,6 +274,11 @@ def handle_selection(stdscr, selected_option, h, w, current_menu_key):
         global selected_song
         selected_song = label  # Save it for later
         menu_stack.append("submenu_song_options")
+        current_index = 0
+    elif current_menu_key == "submenu_spatial_songs" and label.lower() not in ["next page", "previous page", "back"]:
+        # User selected a song
+        selected_song = label  # Save it for later
+        menu_stack.append("submenu_spatial_options")
         current_index = 0
     elif action: # Load the action and run it
         if action_type == "shell":# If the loaded action is of type shell, run the shell command using a subprocess. This is done because curses is running in our current shell, so we need a different one
@@ -260,7 +319,7 @@ def handle_selection(stdscr, selected_option, h, w, current_menu_key):
             except curses.error:
                 pass
         stdscr.refresh()
-        time.sleep(2)
+        time.sleep(5)
     else: # Target has no action attached
         stdscr.clear() 
         message = f"You selected: {label}"
