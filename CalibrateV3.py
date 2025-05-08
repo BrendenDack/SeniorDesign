@@ -264,7 +264,7 @@ def estimate_head_params(calibration_data: dict) -> tuple[dict, str]:
 
     return selected_params, selected_subject
 
-def run_calibration_function():
+def run_calibration_function(up, down, left, right, enter):
     """Main calibration workflow."""
     print("=== HRTF Calibration ===")
     user_id = input("Enter user ID: ").strip()

@@ -12,8 +12,8 @@ import platform
 import os
 
 # Configuration
-PROFILES_DIR = Path("/home/advented/audioProductV1/projectCode/SeniorDesign/user_profiles")
-HRTF_PATH = Path("/home/advented/HRIRs/")
+PROFILES_DIR = Path("user_profiles")
+HRTF_PATH = Path("HRIRs/")
 STEMS = ["bass", "vocals", "drums", "other"]
 FS = 48000  # Match calibrateV2.py
 DURATION = 1.5
@@ -249,7 +249,7 @@ def get_angle_input(current_angle: float, available_angles: list, subject: str) 
         else:
             print(f"\nUnrecognized key: '{ch}'. Use WASD, p, or Enter.")
 
-def main():
+def edit_profile():
     """Main profile editing workflow."""
     print("=== Edit HRTF Profile Stem Directions ===")
     profile_path, profile_data = select_profile(PROFILES_DIR)
@@ -293,8 +293,9 @@ def main():
             json.dump(profile_data, f, indent=2)
         print(f"\nProfile updated and saved to {profile_path}")
         print("Use this profile in test.py to apply custom stem directions.")
+        return "Profile Data Saved Successfully!"
     except Exception as e:
         print(f"Error saving profile: {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    edit_profile()

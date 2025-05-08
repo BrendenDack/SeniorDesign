@@ -16,6 +16,7 @@ from datetime import datetime
 from battery_monitor import get_battery_info
 import soundfile as sf
 from CalibrateV3 import run_calibration_function
+from editProfiles import edit_profile
 
 
 # This is a module in gpiozero that lets us use "pretend" buttons so I can test without it crashing
@@ -52,6 +53,7 @@ directory = None
 # For Speech to Text
 recognition_thread = None
 recognition_running = False
+Loaded_Profile = None
 
 # Menu definitions with labels, targets, and actions
 menus = {
@@ -105,7 +107,8 @@ menus = {
         "title": "Settings",
         "options": [
             {"label": "Change Time", "target": None, "action" : "date", "action_type" : "shell"},
-            {"label": "Change Profile", "target": None, "action" : ""},
+            {"label": "Change Profile", "target": None, "action_type" : "dynamic"},
+            {"label": "Edit Profile", "target": None, "action" : "edit_profiles", "action_type" : "python"},
             {"label": "Run Calibration", "target": None, "action" : "run_calibration", "action_type" : "python"},
             {"label": "Back", "target": "back"}
         ]
@@ -149,7 +152,51 @@ def play_spatial_song():
         except PermissionError:
             print("No permission to delete the file.")
 
+# Function for loading music files dynamically into pages
+def load_profile_files(directory="user_profiles", page=0):
+    # Global Variables
+    global all_music_files, current_page
 
+    music_folder = directory # Path to music folder
+    try:
+        files = os.listdir(music_folder) # Load folder
+        if directory == "Music":
+            mp3s = sorted([f for f in files if f.lower().endswith(".mp3")]) # Sort for .mp3
+            flac = sorted([f for f in files if f.lower().endswith(".flac")]) # Sort for .flac
+            wav = sorted([f for f in files if f.lower().endswith(".wav")]) # Sort for .wav
+            all_music_files = sorted(mp3s + flac + wav)
+        elif directory == "Spatial":
+            pkl = sorted([f for f in files if f.lower().endswith(".pkl")]) # Sort for .pkl
+            all_music_files = pkl
+        current_page = page # Select starting page from parameter variable
+
+        # Determine how many songs to put per page. Adjustable from global variable "items_per_page"
+        start = page * items_per_page
+        end = start + items_per_page
+        current_files = all_music_files[start:end]
+
+        # Dynamically load songs into options so they are displayed on the screen
+        options = [{"label": f, "target": None, "action": f"echo Playing {f}", "action_type": "shell"} for f in current_files]
+
+        # Determine if Previous Page button is shown
+        if page > 0:
+            options.append({"label": "Previous Page", "target": "prev_page"})
+        
+        # Determine if Next Page button is shown
+        if end < len(all_music_files):
+            options.append({"label": "Next Page", "target": "next_page"})
+
+        # Back button to leave library added to end
+        options.append({"label": "Back", "target": "back"})
+        if directory == "Music":
+            menus["submenu_songs"]["options"] = options
+        elif directory == "Spatial":
+            menus["submenu_spatial_songs"]["options"] = options
+    except Exception as e:
+        menus["submenu_spatial_songs"]["options"] = [
+            {"label": f"Error loading files: {e}", "target": "back"},
+            {"label": "Back", "target": "back"}
+        ]
 
 # Function for loading music files dynamically into pages
 def load_music_files(directory="Music", page=0):
@@ -228,7 +275,12 @@ def clear_console(): # For manually clearing the console
 def run_spatial_audio_helper():
     run_spatial_audio(f"Music/{selected_song}")
 
-    
+def calibration_wrapper():
+    run_calibration_function(up=UP_BUTTON, down=DOWN_BUTTON, left=LEFT_BUTTON, right=RIGHT_BUTTON, enter=SELECT_BUTTON)
+
+def change_profile():
+    return
+
 
 # This function dictionary is for storing functions as actions. In the form { "Action_Name" : function_name }
 function_dictionary = {
@@ -238,7 +290,8 @@ function_dictionary = {
     "play_song" : stt.play_button,
     "run_calibration" : run_calibration_function,
     "apply_spatial_audio" : run_spatial_audio_helper,
-    "play_spatial_song" : play_spatial_song
+    "play_spatial_song" : play_spatial_song,
+    "edit_profiles" : edit_profile
 }
 
 def handle_selection(stdscr, selected_option, h, w, current_menu_key):
