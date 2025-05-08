@@ -17,7 +17,7 @@ CHUNK = 8000  # 512 #8000 original chunk size
 WIDTH = 2
 
 # Path for music folder (REPLACE WITH YOUR PATH BRENDEN, ensure you use / not \)
-MUSIC_FOLDER = 'RPI-Sara/code/Music'
+MUSIC_FOLDER = 'SeniorDesign/Music'
 
 # Initialize Vosk model
 model = Model('vosk-model-small-en-us-0.15')
@@ -44,8 +44,9 @@ player = instance.media_player_new()
 tts_player = instance.media_player_new()  # Global player for text-to-speech
 
 # Define specific paths to avoid overlap
-NORMAL_MUSIC_PATH = os.path.join(MUSIC_FOLDER, "normal music").lower()
-NOT_SO_NORMAL_MUSIC_PATH = os.path.join(MUSIC_FOLDER, "not so normal music").lower()
+#NORMAL_MUSIC_PATH = os.path.join(MUSIC_FOLDER, "music").lower()
+NORMAL_MUSIC_PATH = MUSIC_FOLDER
+#NOT_SO_NORMAL_MUSIC_PATH = os.path.join(MUSIC_FOLDER, "not so normal music").lower()
 
 # Load songs into separate playlists
 song_files = []
@@ -60,8 +61,6 @@ for root, dirs, files in os.walk(MUSIC_FOLDER):
 
             if path_lower.startswith(NORMAL_MUSIC_PATH):
                 normal_music_files.append(full_path)
-            elif path_lower.startswith(NOT_SO_NORMAL_MUSIC_PATH):
-                not_so_normal_music_files.append(full_path)
             elif "\\music\\" not in path_lower:  # Exclude anything under Music folder
                 song_files.append(full_path)
 
@@ -99,28 +98,27 @@ def recognize_command(audio_chunk):
     return ''
 
 # Play/choose song function
-def play_song(song_name):
+def play_song(song_name, recognition_running):
     global playlist, current_index, shuffle_history
 
     song_name = song_name.strip().lower()
 
     # Reset playlist based on category
-    if "normal music" in song_name:
+    if "Music" in song_name:
         playlist[:] = normal_music_files
-    elif "not so normal music" in song_name:
-        playlist[:] = not_so_normal_music_files
-    elif song_name in ["", "music", "downloaded music", "playlist", "all songs"]:
+    elif song_name in ["", "music", "all songs"]:
         playlist[:] = song_files
 
     if not playlist:
         print("No songs found in playlist.")
-        speak("Sorry, your playlist is empty.")
+        if recognition_running:
+            speak("Sorry, your playlist is empty.")
         return
 
     shuffle_history = []
 
     song_file = None
-    if song_name and song_name not in ["music", "downloaded music", "playlist", "all songs", "normal music", "not so normal music"]:
+    if song_name and song_name not in ["music", "playlist", "all songs"]:
         for i, song in enumerate(playlist):
             if song_name in os.path.basename(song).lower():
                 song_file = song
@@ -135,23 +133,27 @@ def play_song(song_name):
         player.set_media(media)
         player.play()
         print(f"Now playing: {os.path.basename(song_file)}")
-        speak(f"Now playing {os.path.splitext(os.path.basename(song_file))[0]}")
+        if recognition_running:
+            speak(f"Now playing {os.path.splitext(os.path.basename(song_file))[0]}")
     else:
         print("Could not find the song.")
-        speak("Sorry, I could not find that song.")
+        if recognition_running:
+            speak("Sorry, I could not find that song.")
 
 # Pause function
-def pause_song():
+def pause_song(recognition_running):
     player.pause()
-    speak("Song paused.")
+    if recognition_running:
+        speak("Song paused.")
 
 # Resume function
-def resume_song():
+def resume_song(recognition_running):
     player.play()
-    speak("Song resumed.")
+    if recognition_running:
+        speak("Song resumed.")
 
 # Next song function
-def next_song():
+def next_song(recognition_running):
     global current_index, shuffle_history
     if not playlist:
         speak("Playlist is empty.")
@@ -171,13 +173,15 @@ def next_song():
     player.set_media(media)
     player.play()
     print(f"Playing next song: {os.path.basename(song_path)}")
-    speak("Playing next song.")
+    if recognition_running:
+        speak("Playing next song.")
 
 # Previous song function
-def previous_song():
+def previous_song(recognition_running):
     global current_index, shuffle_history
     if not playlist:
-        speak("Playlist is empty.")
+        if recognition_running:
+            speak("Playlist is empty.")
         return
 
     if shuffle and shuffle_history:
@@ -190,20 +194,23 @@ def previous_song():
     player.set_media(media)
     player.play()
     print(f"Playing previous song: {os.path.basename(song_path)}")
-    speak("Playing previous song.")
+    if recognition_running:
+        speak("Playing previous song.")
 
 # Toggle loop mode
-def toggle_loop():
+def toggle_loop(recognition_running):
     global loop
     loop = not loop
-    speak("Loop mode on." if loop else "Loop mode off.")
+    if recognition_running:
+        speak("Loop mode on." if loop else "Loop mode off.")
 
 # Toggle shuffle mode
-def toggle_shuffle():
+def toggle_shuffle(recognition_running):
     global shuffle, shuffle_history
     shuffle = not shuffle
     shuffle_history = []
-    speak("Shuffle mode on." if shuffle else "Shuffle mode off.")
+    if recognition_running:
+        speak("Shuffle mode on." if shuffle else "Shuffle mode off.")
 
 # Volume control functions (new functionality, for the purpose of being able to hear during music)
 NORMAL_VOLUME = 80
@@ -264,17 +271,17 @@ def start_voice_recognition():
                             song_name = command.replace("play", "").strip()
                             play_song(song_name)
                         elif "pause" in command:
-                            pause_song()
+                            pause_song(True)
                         elif "resume" in command:
-                            resume_song()
+                            resume_song(True)
                         elif "next" in command:
-                            next_song()
+                            next_song(True)
                         elif "previous" in command:
-                            previous_song()
+                            previous_song(True)
                         elif "loop" in command:
-                            toggle_loop()
+                            toggle_loop(True)
                         elif "shuffle" in command:
-                            toggle_shuffle()
+                            toggle_shuffle(True)
                         elif "stop" in command:
                             print("Stopping")
                             sys.exit()
@@ -295,7 +302,7 @@ def start_voice_recognition():
                     player.set_media(media)
                     player.play()
                 else:
-                    next_song()
+                    next_song(True)
 
             time.sleep(0.5)
 
