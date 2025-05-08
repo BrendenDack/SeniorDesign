@@ -228,8 +228,6 @@ def clear_console(): # For manually clearing the console
 def run_spatial_audio_helper():
     run_spatial_audio(f"Music/{selected_song}")
 
-def play_song_wrapper():
-    stt.play_song()
     
 
 # This function dictionary is for storing functions as actions. In the form { "Action_Name" : function_name }
@@ -237,7 +235,7 @@ function_dictionary = {
     # Default setup for function dictionary. Just add your name and function to use it in the submenus
     "default_function" : clear_console, 
     "start_voice" : start_voice,
-    "play_song" : play_song_wrapper,
+    "play_song" : stt.play_button,
     "run_calibration" : run_calibration_function,
     "apply_spatial_audio" : run_spatial_audio_helper,
     "play_spatial_song" : play_spatial_song
