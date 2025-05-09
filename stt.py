@@ -17,7 +17,7 @@ CHUNK = 8000  # 512 #8000 original chunk size
 WIDTH = 2
 
 # Path for music folder (REPLACE WITH YOUR PATH BRENDEN, ensure you use / not \)
-MUSIC_FOLDER = '/home/brendendack/SeniorDesign/Music'
+MUSIC_FOLDER = '/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/Music'
 
 # Initialize Vosk model
 model = Model('vosk-model-small-en-us-0.15')
@@ -258,6 +258,16 @@ def lower_volume():
 def restore_volume():
     player.audio_set_volume(NORMAL_VOLUME)
     print("Volume restored to", NORMAL_VOLUME)
+
+# system update Volume    
+def update_volume(increment ,GLOBAL_VOLUME):
+    player.audio_set_volume(GLOBAL_VOLUME + increment)
+    
+    return GLOBAL_VOLUME
+    
+
+
+    
 
 def start_voice_recognition():
     global player, playlist
