@@ -159,7 +159,8 @@ def play_spatial_song():
             stems = pickle.load(f)
             print(stems)
         print("Apply HRTFs")
-        spatial_stems = apply_bulk_hrtf(stems, Loaded_Profile=Loaded_Profile)
+        print("Loaded Profile: ", Loaded_Profile)
+        spatial_stems = apply_bulk_hrtf(estimates_numpy=stems, Loaded_Profile=Loaded_Profile)
         print("Generate summed song")
         final_output = summed_signal(spatial_stems['vocals'], spatial_stems['bass'], spatial_stems['other'], spatial_stems['drums'])
         print("Write Stems to flac")
@@ -299,7 +300,7 @@ def calibration_wrapper():
     run_calibration_function()
 
 def change_profile_wrapper():
-    global current_index
+    global current_index, Loaded_Profile
     Loaded_Profile = selected_song
     temp_str = Loaded_Profile.removesuffix(".json")
     current_index = 0
@@ -336,7 +337,7 @@ function_dictionary = {
     "default_function" : clear_console, 
     "start_voice" : start_voice,
     "play_song" : stt.play_button,
-    "run_calibration" : run_calibration_function,
+    "run_calibration" : run_calibration_wrapper,
     "apply_spatial_audio" : run_spatial_audio_helper,
     "play_spatial_song" : play_spatial_song,
     "edit_profiles" : edit_profile,
