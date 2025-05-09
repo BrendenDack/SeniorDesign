@@ -292,7 +292,8 @@ def run_spatial_audio_helper():
     run_spatial_audio(f"Music/{selected_song}")
 
 def calibration_wrapper():
-    run_calibration_function(up=UP_BUTTON, down=DOWN_BUTTON, left=LEFT_BUTTON, right=RIGHT_BUTTON, enter=SELECT_BUTTON)
+    #run_calibration_function(up=UP_BUTTON, down=DOWN_BUTTON, left=LEFT_BUTTON, right=RIGHT_BUTTON, enter=SELECT_BUTTON)
+    run_calibration_function()
 
 def change_profile_wrapper():
     global current_index
