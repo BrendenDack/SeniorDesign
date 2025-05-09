@@ -140,27 +140,57 @@ def play_song(song_name):
         print("Could not find the song.")
         speak("Sorry, I could not find that song.")
 
-def play_button():
+def play_button(): 
     global playlist, current_index
     playlist[:] = song_files
-    current_index = 0
-    #if current_index < len(playlist):
-    #current_index = (current_index - 1) % len(playlist)
+    current_index = 0 
     song_path = playlist[current_index]
     media = instance.media_new(song_path)
     player.set_media(media)
     player.play()
+
+def play_button(selected_song): 
+    global playlist, current_index
+    playlist[:] = song_files
+    current_index = 0 
+    song_path = playlist[current_index]
+    media = instance.media_new(f"Music/{selected_song}")
+    player.set_media(media)
+    player.play()
+
+    # if player.get_state() == vlc.State.Ended and playlist:
+    #     if loop:
+    #         song_path = playlist[current_index]
+    #         media = instance.media_new(f"Music/{selected_song}")
+    #         player.set_media(media)
+    #         player.play()
+    #     else:
+    #         next_song()
     
+    while player.get_state() != vlc.State.Ended and not playlist:
+        pass
+    if loop:
+            song_path = playlist[current_index]
+            media = instance.media_new(f"Music/{selected_song}")
+            player.set_media(media)
+            player.play()
+    else:
+        next_song()
+#def play_button(selected_song): 
+    
+    #media = instance.media_new(f"Music/{selected_song}")
+    #player.set_media(media)
+    #player.play()
 
 # Pause function
 def pause_song():
     player.pause()
-    speak("Song paused.")
+   # speak("Song paused.")
 
 # Resume function
 def resume_song():
     player.play()
-    speak("Song resumed.")
+    #speak("Song resumed.")
 
 # Next song function
 def next_song():
@@ -183,7 +213,7 @@ def next_song():
     player.set_media(media)
     player.play()
     print(f"Playing next song: {os.path.basename(song_path)}")
-    speak("Playing next song.")
+    #speak("Playing next song.")
 
 # Previous song function
 def previous_song():
@@ -202,7 +232,7 @@ def previous_song():
     player.set_media(media)
     player.play()
     print(f"Playing previous song: {os.path.basename(song_path)}")
-    speak("Playing previous song.")
+    #speak("Playing previous song.")
 
 # Toggle loop mode
 def toggle_loop():
@@ -215,10 +245,10 @@ def toggle_shuffle():
     global shuffle, shuffle_history
     shuffle = not shuffle
     shuffle_history = []
-    speak("Shuffle mode on." if shuffle else "Shuffle mode off.")
+    #speak("Shuffle mode on." if shuffle else "Shuffle mode off.")
 
 # Volume control functions (new functionality, for the purpose of being able to hear during music)
-NORMAL_VOLUME = 80
+NORMAL_VOLUME = 100 #80
 LOW_VOLUME = 40
 
 def lower_volume():
@@ -276,17 +306,23 @@ def start_voice_recognition():
                             song_name = command.replace("play", "").strip()
                             play_song(song_name)
                         elif "pause" in command:
+                            speak("Song paused.")
                             pause_song()
                         elif "resume" in command:
+                            speak("Song resumed.")
                             resume_song()
                         elif "next" in command:
+                            speak("Playing next song.")
                             next_song()
                         elif "previous" in command:
+                            speak("Playing previous song.")
                             previous_song()
                         elif "loop" in command:
+                            speak("Loop mode on." if loop else "Loop mode off.")
                             toggle_loop()
                         elif "shuffle" in command:
                             toggle_shuffle()
+                            speak("Shuffle mode on." if shuffle else "Shuffle mode off.")
                         elif "stop" in command:
                             print("Stopping")
                             sys.exit()
