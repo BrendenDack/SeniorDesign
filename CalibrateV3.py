@@ -7,11 +7,11 @@ import time
 import json
 import os
 import sys
-import tty
-import termios
 from pathlib import Path
 import platform
 import random
+import termios
+import tty
 
 # Configuration
 DURATION = 1.5
@@ -118,38 +118,46 @@ def play_audio(audio_data: np.ndarray, fs: int) -> bool:
         sys.stdout.flush()
         sys.stderr.flush()
 
-def get_key() -> str:
-    """Read a single key press from standard input without echoing."""
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-    return ch
+def get_input(up=None, down=None, left=None, right=None, enter=None) -> str:
+    """Read a single input from GPIO buttons."""
+    time.sleep(0.2)
+    if up and up.is_pressed:
+        return 'w'
+    if down and down.is_pressed:
+        return 's'
+    if right and right.is_pressed:
+        return 'd'
+    if left and left.is_pressed:
+        return 'a'
+    if enter and enter.is_pressed:
+        return '\n'
+    return ''
 
-def get_angle_input(current_angle: float, preset_angle: float, stimulus: np.ndarray, spatial_audio: np.ndarray, fs: int) -> float:
+def get_angle_input(current_angle: float, preset_angle: float, stimulus: np.ndarray, spatial_audio: np.ndarray, fs: int, up=None, down=None, left=None, right=None, enter=None) -> float:
     """
     Interactively adjust the perceived angle with deviation feedback.
     Use:
-      • w: +10°
-      • s: -10°
-      • d: +1°
-      • a: -1°
+      • w/up: +10°
+      • s/down: -10°
+      • d/right: +1°
+      • a/left: -1°
       • r: Replay sound (for rear angles)
-    Press Enter to confirm the current angle.
-    To enter a specific angle, start typing the number.
+    Press enter button to confirm the current angle.
     """
-    print("\nAdjust the perceived angle (WASD for adjustments, r to replay, or type a number):")
-    print("  w: +10°, s: -10°, d: +1°, a: -1°, r: replay")
-    print("Press Enter to confirm the current angle.")
+    print("\nAdjust the perceived angle (WASD/buttons for adjustments, r to replay):")
+    print("  w/up: +10°, s/down: -10°, d/right: +1°, a/left: -1°, r: replay")
+    print("Press enter button to confirm the current angle.")
     angle = current_angle
     while True:
         deviation = abs(angle - preset_angle)
-        print(f"Current angle: {angle:.1f}° (Deviation: {deviation:.1f}°)  ", end="", flush=True)
-        ch = get_key()
-        if ch in ('\r', '\n'):
+        sys.stdout.write("\r\033[K")
+        sys.stdout.flush()
+        print(f"Current angle: {angle:.1f}° (Deviation: {deviation:.1f}°)", end="", flush=True)
+        ch = get_input(up, down, left, right, enter)
+        if not ch:
+            time.sleep(0.2)  # Prevent flooding
+            continue
+        if ch == '\n':
             print()
             return angle
         elif ch.lower() == 'w':
@@ -160,22 +168,13 @@ def get_angle_input(current_angle: float, preset_angle: float, stimulus: np.ndar
             angle += 1
         elif ch.lower() == 'a':
             angle -= 1
-        elif ch.lower() == 'r' and abs(preset_angle) > 90:  # Replay for rear angles
+        elif ch.lower() == 'r' and abs(preset_angle) > 90:
             play_audio(spatial_audio, fs)
             print("Replayed test sound...")
-        elif ch.isdigit() or ch in ('-', '.'):
-            sys.stdout.write(ch)
-            sys.stdout.flush()
-            user_input = input()
-            try:
-                angle = float(ch + user_input)
-                return angle
-            except ValueError:
-                print("Invalid numeric input, please try again.")
         else:
-            print(f"\nUnrecognized key: '{ch}'. Use WASD, r, or Enter.")
+            print(f"\nUnrecognized input: '{ch}'. Use WASD/buttons or r.")
 
-def calibration_routine(hrtf_subjects: list, normalized_angles: list, num_trials: int = 4) -> dict:
+def calibration_routine(hrtf_subjects: list, normalized_angles: list, num_trials: int = 4, up=None, down=None, left=None, right=None, enter=None) -> dict:
     """
     Calibration routine for multiple HRTF subjects.
     Randomly selects 4 angles per subject, snapped to available HRIR angles, prioritizing negative angles.
@@ -190,7 +189,7 @@ def calibration_routine(hrtf_subjects: list, normalized_angles: list, num_trials
 
         # Snap normalized angles to available angles
         snapped_angles = [snap_to_nearest_angle(angle, available_angles) for angle in normalized_angles]
-        # Ensure at least 2 negative angles by prioritizing negative snapped angles
+        # Ensure at least 2 negative angles
         negative_angles = [a for a in snapped_angles if a < 0]
         positive_angles = [a for a in snapped_angles if a >= 0]
         if len(negative_angles) < 2:
@@ -200,7 +199,7 @@ def calibration_routine(hrtf_subjects: list, normalized_angles: list, num_trials
             negative_angles = negative_angles[:2]
             positive_angles = positive_angles[:2]
 
-        # Select 4 random angles, allowing repeats, ensuring 2+ negative
+        # Select 4 random angles
         trial_angles = negative_angles + random.choices(negative_angles + positive_angles, k=num_trials - len(negative_angles))
         random.shuffle(trial_angles)
 
@@ -221,7 +220,8 @@ def calibration_routine(hrtf_subjects: list, normalized_angles: list, num_trials
                 continue
             if play_audio(spatial_audio, FS):
                 print("Playing test sound...")
-                response = get_angle_input(preset_angle, preset_angle, stimulus, spatial_audio, FS)
+                response = get_angle_input(preset_angle, preset_angle, stimulus, spatial_audio, FS, up, down, left, right, enter)
+                time.sleep(0.1)
                 calibration_data[subject]['preset_angles'].append(preset_angle)
                 calibration_data[subject]['responses'].append(response)
     return calibration_data
@@ -233,7 +233,7 @@ def estimate_head_params(calibration_data: dict) -> tuple[dict, str]:
 
     params = {}
     for subject, data in calibration_data.items():
-        if not data['responses']:  # Skip if no responses
+        if not data['responses']:
             continue
         mean_response = np.mean([abs(r - p) for r, p in zip(data['responses'], data['preset_angles'])])
         if mean_response > 20:
@@ -244,7 +244,6 @@ def estimate_head_params(calibration_data: dict) -> tuple[dict, str]:
             'effective_radius': 0.51 * mean_response + 3.2
         }
 
-    # Default to male if no valid params
     if not params:
         return male_norms, '003'
 
@@ -264,18 +263,137 @@ def estimate_head_params(calibration_data: dict) -> tuple[dict, str]:
 
     return selected_params, selected_subject
 
-def run_calibration_function():
+
+# def select_profile(up=None, down=None, enter=None) -> str:
+#     #os.system('cls' if os.name == 'nt' else 'clear')
+
+#     """Select a profile using up/down buttons, confirm with enter."""
+#     profile_files = sorted([f for f in PROFILES_DIR.glob("*.json") if f.is_file()])
+    
+#     if not profile_files:
+#         print("No profiles found in user_profiles/")
+#         return None
+#     if len(profile_files) > 5:
+#         profile_files = profile_files[:5]
+
+#     selected_idx = 0
+#     has_navigated = False
+#     print("Select a profile (up/w, down/s, enter to confirm):")
+#     for i, profile in enumerate(profile_files):
+#         cursor = "> " if i == selected_idx else "  "
+#         print(f"{cursor}{i + 1}) {profile.stem}")
+#     sys.stdout.flush()
+
+#     num_lines = len(profile_files) + 1
+#     while True:
+
+#         ch = get_input(up, down, None, None, enter)
+#         if not ch:
+#             time.sleep(0.1)  # Prevent CPU overload
+#             continue
+#         if ch == '\n' and has_navigated:
+#             sys.stdout.write(f"\033[{num_lines}A")
+#             sys.stdout.flush()
+#             for _ in range(num_lines):
+#                 sys.stdout.write("\033[K\n")
+#             sys.stdout.flush()
+#             sys.stdout.write(f"\033[{num_lines}A")
+#             sys.stdout.flush()
+#             return profile_files[selected_idx].stem
+#         elif ch.lower() == 'w':
+#             if selected_idx >= 0:
+#                 sys.stdout.write(f"\033[{selected_idx + 2}A\r  ")
+#                 sys.stdout.flush()
+#                 selected_idx -= 1
+#                 sys.stdout.write(f"\033[{selected_idx + 2}A\r> ")
+#                 sys.stdout.flush()
+#                 sys.stdout.write(f"\033[{num_lines - selected_idx - 1}B")
+#                 sys.stdout.flush()
+#                 has_navigated = True
+#         elif ch.lower() == 's':
+#             if selected_idx < len(profile_files) - 1:
+#                 sys.stdout.write(f"\033[{selected_idx + 2}A\r  ")
+#                 sys.stdout.flush()
+#                 selected_idx += 1
+#                 sys.stdout.write(f"\033[{selected_idx + 2}A\r> ")
+#                 sys.stdout.flush()
+#                 sys.stdout.write(f"\033[{num_lines - selected_idx - 1}B")
+#                 sys.stdout.flush()
+#                 has_navigated = True
+#         else:
+#             print("\rUse up/w, down/s, or enter to select.")
+
+
+
+def get_key() -> str:
+    """Read a single key press without echoing."""
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+
+def select_profile(up=None, down=None, enter=None) -> str:
+    """Prompt user to select a profile from user_profiles using WASD."""
+    profiles_dir = PROFILES_DIR
+    profiles = sorted(profiles_dir.glob("*.json"))
+    if not profiles:
+        print("No profiles found in user_profiles/. Creating default profile.")
+        return "default_profile"
+    
+    
+    selected_idx = 0
+    while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("\nSelect a profile (w/s to navigate, Enter to select):")
+        for i, profile in enumerate(profiles):
+            marker = ">" if i == selected_idx else " "
+            print(f"{marker} {profile.name}")
+        sys.stdout.flush()
+
+        ch = get_input(up=up, down=down, enter=enter)
+        if ch in ('\r', '\n'):
+            try:
+                
+                print(f"\nSelected profile: {profiles[selected_idx].name}")
+            
+                """
+                print(f"  HRTF Subject: {profile_data['hrtf_subject']} ({'Female' if profile_data['hrtf_subject'] == '019' else 'Male'})")
+                print(f"  Head Width: {profile_data.get('head_width', 15.2):.2f} cm")
+                print(f"  Head Length: {profile_data.get('head_length', 19.0):.2f} cm")
+                print(f"  Effective Radius: {profile_data['effective_radius']:.2f} cm")
+                """
+                
+                return profiles[selected_idx].name
+            except json.JSONDecodeError:
+                print(f"Error: {profiles[selected_idx].name} is not a valid JSON file.")
+                return profiles[selected_idx].name
+        elif ch.lower() == 'w' and selected_idx > 0:
+            selected_idx -= 1
+        elif ch.lower() == 's' and selected_idx < len(profiles) - 1:
+            selected_idx += 1
+
+
+
+def run_calibration_function(up=None, down=None, left=None, right=None, enter=None) -> str:
     """Main calibration workflow."""
     print("=== HRTF Calibration ===")
-    user_id = input("Enter user ID: ").strip()
-    profile_path = PROFILES_DIR / f"{user_id}.json"
+    user_id = select_profile(up=up, down=down, enter=enter)
+    
+    if not user_id:
+        print("Calibration failed: No profiles available")
+        return "Calibration failed: No profiles available"
+    print(f"{user_id}")
+    profile_path = PROFILES_DIR / f"{user_id}"
     os.makedirs(PROFILES_DIR, exist_ok=True)
     
-    # Run calibration for both subjects
     hrtf_subjects = ['003', '019']
-    calibration_results = calibration_routine(hrtf_subjects, NORMALIZED_ANGLES)
+    calibration_results = calibration_routine(hrtf_subjects, NORMALIZED_ANGLES, up=up, down=down, left=left, right=right, enter=enter)
     
-    # Save profile
     head_params, hrtf_subject = estimate_head_params(calibration_results)
     profile = {
         **head_params,
@@ -287,15 +405,18 @@ def run_calibration_function():
         with open(profile_path, 'w') as f:
             json.dump(profile, f, indent=2)
         print(f"\nCalibration complete! Profile saved to {profile_path}")
+        
         print("\nYour Head Measurements:")
         print(f"  Head Width: {head_params['head_width']:.2f} cm")
         print(f"  Head Length: {head_params['head_length']:.2f} cm")
         print(f"  Effective Radius: {head_params['effective_radius']:.2f} cm")
         print(f"Selected HRTF Subject: {hrtf_subject} ({'Female' if hrtf_subject == '019' else 'Male'})")
+        
         print("This profile can be used in test.py for personalized spatial audio.")
         return f"Success! Profile saved as {user_id}"
     except Exception as e:
         print(f"Error saving profile: {str(e)}")
+        return f"Calibration failed: {str(e)}"
 
 if __name__ == "__main__":
     run_calibration_function()

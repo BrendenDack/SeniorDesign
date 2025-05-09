@@ -13,27 +13,30 @@ import stt
 from calibrateUserProfile import run_calibration
 from utility import run_spatial_audio, apply_bulk_hrtf, summed_signal
 from datetime import datetime
-from battery_monitor import get_battery_info
+from menu_app_modular.battery_monitor import get_battery_info
 import soundfile as sf
 from CalibrateV3 import run_calibration_function
+
+import smbus2
+
 
 
 # This is a module in gpiozero that lets us use "pretend" buttons so I can test without it crashing
 # It allows you to also manually set pin values for buttons to test without real hardware
 # Mock pins for testing - Remove if you have real buttons to test with
-gpio.Device.pin_factory = MockFactory()
+#gpio.Device.pin_factory = MockFactory()
 
 # GPIO buttons (optional for testing on hardware)
 try:
     # Claim all button GPIOs
-    SELECT_BUTTON =  Button(26, pull_up=False, bounce_time=0.1)
-    BACK_BUTTON =  Button(16, pull_up=False, bounce_time=0.1)
-    UP_BUTTON =  Button(4, pull_up=False, bounce_time=0.1)
-    RIGHT_BUTTON =  Button(22, pull_up=False, bounce_time=0.1)
-    DOWN_BUTTON =  Button(20, pull_up=False, bounce_time=0.1)
-    LEFT_BUTTON =  Button(21, pull_up=False, bounce_time=0.1)
-    VOLUME_UP =  Button(23, pull_up=False, bounce_time=0.1)
-    VOLUME_DOWN =  Button(24, pull_up=False, bounce_time=0.1)
+    SELECT_BUTTON =  Button(26, pull_up=False, bounce_time=0.2)
+    BACK_BUTTON =  Button(16, pull_up=False, bounce_time=0.2)
+    UP_BUTTON =  Button(4, pull_up=False, bounce_time=0.2)
+    RIGHT_BUTTON =  Button(22, pull_up=False, bounce_time=0.2)
+    DOWN_BUTTON =  Button(20, pull_up=False, bounce_time=0.2)
+    LEFT_BUTTON =  Button(21, pull_up=False, bounce_time=0.2)
+    VOLUME_UP =  Button(23, pull_up=False, bounce_time=0.2)
+    VOLUME_DOWN =  Button(24, pull_up=False, bounce_time=0.)
 except GPIOZeroError:
     SELECT_BUTTON = BACK_BUTTON = UP_BUTTON = RIGHT_BUTTON = DOWN_BUTTON = LEFT_BUTTON = VOLUME_DOWN = VOLUME_UP = None # If buttons fail, set all to none and use fallback method (keyboard)
     print(f"Buttons init Failed. Could not claim Buttons.")
@@ -231,6 +234,20 @@ def run_spatial_audio_helper():
 def play_song_wrapper():
     stt.play_song()
     
+    
+def run_calibration_wrapper():
+    """Wrapper to call run_calibration_function with GPIO buttons."""
+    try:
+        output = run_calibration_function(
+            up=UP_BUTTON,
+            down=DOWN_BUTTON,
+            left=LEFT_BUTTON,
+            right=RIGHT_BUTTON,
+            enter=SELECT_BUTTON
+        )
+    except Exception as e:
+        output = f"Calibration error: {str(e)}"
+    return output
 
 # This function dictionary is for storing functions as actions. In the form { "Action_Name" : function_name }
 function_dictionary = {
@@ -238,10 +255,13 @@ function_dictionary = {
     "default_function" : clear_console, 
     "start_voice" : start_voice,
     "play_song" : play_song_wrapper,
-    "run_calibration" : run_calibration_function,
+    "run_calibration" : run_calibration_wrapper,
     "apply_spatial_audio" : run_spatial_audio_helper,
     "play_spatial_song" : play_spatial_song
 }
+
+
+
 
 def handle_selection(stdscr, selected_option, h, w, current_menu_key):
     # Global variable
@@ -358,9 +378,13 @@ def draw_menu(stdscr):
         now = datetime.now()
         time_str = now.strftime("%I:%M:%S %p")  # e.g., 04:15:22 PM
         stdscr.addstr(0, w - len(time_str) - 1, time_str)
+        
         # Battery stuff but I don't have the PSU so I'll touch it later 
-        #battery = get_battery_info()
-        #stdscr.addstr(1, w - len(battery) - 1, battery[0])
+        # will return Int or truncated calculated battery percentage
+        battery = get_battery_info()
+        
+        
+        stdscr.addstr(1, w - len(battery) - 1, str(int(battery[1])) + "%") # Battery percentage
 
         # Menu variables
         current_menu_key = menu_stack[-1] # Get current menu

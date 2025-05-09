@@ -5,12 +5,17 @@ import logging
 import smbus2
 from gpiozero import Button
 from gpiozero.exc import GPIOZeroError
+from time import time
+from collections import deque
 
 # Constants
 I2C_BUS_ID = 1
 I2C_ADDRESS = 0x36
 CHARGE_STATE_PIN = 6  # GPIO pin for charge state detection
 BATTERY_CAPACITY_MAH = 10000  # UPS battery spec
+CAPACITY_WINDOW_SECONDS = 10  # Time window for capacity trend
+CAPACITY_MIN_INCREASE = 0.5  # Minimum % increase to confirm charging
+STUCK_CAPACITY_TIMEOUT = 60  # Seconds to detect stuck capacity
 
 # Setup logging to same file as menu_renderer
 logging.basicConfig(
@@ -25,6 +30,9 @@ class BatteryMonitor:
         self.bus = None
         self.pld_button = None
         self.use_gpio = use_gpio
+        self.capacity_history = deque(maxlen=10)  # Store (timestamp, capacity) pairs
+        self.last_capacity = None
+        self.last_capacity_time = None
         try:
             self.bus = smbus2.SMBus(I2C_BUS_ID)
             logging.info("I2C bus initialized")
@@ -144,6 +152,38 @@ class BatteryMonitor:
         power_state = self.detect_power_state()
         status = self.get_battery_status(voltage, power_state)
         capacity_percent = round(capacity, 1) if capacity is not None else 0.0
+
+        # Log power draw to diagnose PSU capacity
+        power_watts = self.read_power_draw()
+        if power_watts is not None:
+            logging.debug(f"System power draw in get_battery_info: {power_watts:.2f}W")
+
+        # Track capacity trend to confirm charging
+        current_time = time()
+        self.capacity_history.append((current_time, capacity_percent))
+        
+        # Check if capacity has increased in the last CAPACITY_WINDOW_SECONDS
+        if status == "Charging" and len(self.capacity_history) >= 2:
+            oldest_time, oldest_capacity = self.capacity_history[0]
+            if current_time - oldest_time <= CAPACITY_WINDOW_SECONDS:
+                capacity_increase = capacity_percent - oldest_capacity
+                if capacity_increase < CAPACITY_MIN_INCREASE:
+                    status = "Not Charging"
+                    logging.debug(f"Charging status overridden to Not Charging: capacity increase {capacity_increase:.1f}% < {CAPACITY_MIN_INCREASE}%")
+            else:
+                # Clear old entries
+                while self.capacity_history and current_time - self.capacity_history[0][0] > CAPACITY_WINDOW_SECONDS:
+                    self.capacity_history.popleft()
+
+        # Check for stuck capacity
+        if capacity_percent is not None:
+            if self.last_capacity == capacity_percent and self.last_capacity_time is not None:
+                if current_time - self.last_capacity_time > STUCK_CAPACITY_TIMEOUT and power_state == "Plugged In":
+                    logging.warning(f"Capacity stuck at {capacity_percent:.1f}% for over {STUCK_CAPACITY_TIMEOUT} seconds while Plugged In")
+            else:
+                self.last_capacity = capacity_percent
+                self.last_capacity_time = current_time
+
         return (status, capacity_percent)
 
     def get_system_status(self):
@@ -162,7 +202,8 @@ class BatteryMonitor:
             "Low": "battery_low.png",
             "Critical": "battery_critical.png",
             "Unknown": "battery_critical.png",
-            "Charging": "battery_charging.png"
+            "Charging": "battery_charging.png",
+            "Not Charging": "battery_critical.png"
         }
 
         return {

@@ -145,8 +145,8 @@ class MenuRenderer:
             now = datetime.now()
             time_str = now.strftime("%I:%M:%S %p")
             stdscr.addstr(0, w - len(time_str) - 1, time_str)
-            battery = get_battery_info()
-            battery_str = str(battery[0])
+            battery_status, battery_percent = get_battery_info()
+            battery_str = f"{battery_percent:.1f}% C" if battery_status == "Charging" else f"{battery_percent:.1f}%" if battery_percent is not None else "N/A%"
             stdscr.addstr(1, w - len(battery_str) - 1, battery_str)
 
             options = current_menu["options"]
