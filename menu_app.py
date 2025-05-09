@@ -25,7 +25,7 @@ import smbus2
 # This is a module in gpiozero that lets us use "pretend" buttons so I can test without it crashing
 # It allows you to also manually set pin values for buttons to test without real hardware
 # Mock pins for testing - Remove if you have real buttons to test with
-#gpio.Device.pin_factory = MockFactory()
+gpio.Device.pin_factory = MockFactory()
 
 # GPIO buttons (optional for testing on hardware)
 try:
@@ -153,14 +153,10 @@ def play_selected_song():
 
 def play_spatial_song():
     print("Check if pickle file exists")
-    if selected_song and os.path.exists(f"Spatial/{selected_song}"):
-        print("Attempt to load pickle file")
-        with open(f"Spatial/{selected_song}", 'rb') as f:
-            stems = pickle.load(f)
-            print(stems)
-        print("Apply HRTFs")
+    stems_directory = f"Spatial/{selected_song}"
+    if selected_song and os.path.exists(stems_directory):
         print("Loaded Profile: ", Loaded_Profile)
-        spatial_stems = apply_bulk_hrtf(estimates_numpy=stems, Loaded_Profile=Loaded_Profile)
+        spatial_stems = apply_bulk_hrtf(stems_directory, Loaded_Profile=Loaded_Profile)
         print("Generate summed song")
         final_output = summed_signal(spatial_stems['vocals'], spatial_stems['bass'], spatial_stems['other'], spatial_stems['drums'])
         print("Write Stems to flac")
@@ -174,6 +170,8 @@ def play_spatial_song():
             print("File not found.")
         except PermissionError:
             print("No permission to delete the file.")
+    else:
+        return "File not found"
 
 # Function for loading music files dynamically into pages
 def load_profile_files(directory="user_profiles"):
@@ -227,7 +225,8 @@ def load_music_files(directory="Music", page=0):
             all_music_files = sorted(mp3s + flac + wav)
         elif directory == "Spatial":
             pkl = sorted([f for f in files if f.lower().endswith(".pkl")]) # Sort for .pkl
-            all_music_files = pkl
+            h5 = sorted([f for f in files if f.lower().endswith(".h5")]) # Sort for .h5
+            all_music_files = sorted(pkl + h5)
         current_page = page # Select starting page from parameter variable
 
         # Determine how many songs to put per page. Adjustable from global variable "items_per_page"
