@@ -151,7 +151,56 @@ def play_selected_song():
     else:
         print("No song selected")
 
+
 def play_spatial_song():
+    """Play a spatialized song using indexed pickle storage from the assigned song folder."""
+    
+    song_dir = f"Spatial/{selected_song}/"
+    metadata_file = f"{song_dir}metadata.pkl"
+    data_file = f"{song_dir}stems.pkl"
+
+    print("✅ Checking if metadata exists...")
+    if not os.path.exists(metadata_file):
+        print(f"❌ Metadata not found for {selected_song}. Ensure the song was processed correctly.")
+        return
+
+    print("🔄 Loading indexed metadata...")
+    with open(metadata_file, "rb") as meta_f:
+        metadata = pickle.load(meta_f)
+
+    print("🎧 Applying HRTFs...")
+    spatial_stems = {}  # Stores processed stems
+
+    for stem_name in ["vocals", "drums", "bass", "other"]:
+        if stem_name in metadata:
+            print(f"🔍 Loading '{stem_name}' stem dynamically...")
+            stem_data = load_specific_stem(stem_name, selected_song)
+            spatial_stems[stem_name] = apply_hrtf(stem_data, metadata[stem_name].get("angle", 0), Loaded_Profile)
+
+    print("🎶 Generating final summed song...")
+    final_output = summed_signal(
+        spatial_stems["vocals"], 
+        spatial_stems["bass"], 
+        spatial_stems["other"], 
+        spatial_stems["drums"]
+    )
+
+    output_file = f"{song_dir}output.flac"
+    print(f"💾 Writing spatialized stems to {output_file}...")
+    sf.write(output_file, final_output, 44100)
+
+    print("▶️ Playing song via FFmpeg...")
+    subprocess.run(f'ffplay -nodisp -autoexit "{output_file}"', shell=True)
+
+    try:
+        os.remove(output_file)
+        print("🗑️ File removed.")
+    except FileNotFoundError:
+        print("❌ File not found.")
+    except PermissionError:
+        print("🚫 No permission to delete the file.")
+
+def play_spatial_song_old():
     print("Check if pickle file exists")
     if selected_song and os.path.exists(f"Spatial/{selected_song}"):
         print("Attempt to load pickle file")
