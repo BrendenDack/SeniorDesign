@@ -349,7 +349,7 @@ def select_profile(up=None, down=None, enter=None) -> str:
     selected_idx = 0
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
-        print("\nSelect a profile (w/s to navigate, Enter to select):")
+        print("\nSelect a profile (Up/Down to navigate, Enter to select):")
         for i, profile in enumerate(profiles):
             marker = ">" if i == selected_idx else " "
             print(f"{marker} {profile.name}")

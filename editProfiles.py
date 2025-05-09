@@ -10,6 +10,7 @@ from scipy import signal
 import pyaudio
 import platform
 import os
+import time
 
 # Configuration
 PROFILES_DIR = Path("user_profiles")
@@ -127,7 +128,24 @@ def get_key() -> str:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     return ch
 
-def select_profile(profiles_dir: Path) -> tuple[Path, dict]:
+
+def get_input(up=None, down=None, left=None, right=None, enter=None) -> str:
+    """Read a single input from GPIO buttons."""
+    time.sleep(0.2)
+    if up and up.is_pressed:
+        return 'w'
+    if down and down.is_pressed:
+        return 's'
+    if right and right.is_pressed:
+        return 'd'
+    if left and left.is_pressed:
+        return 'a'
+    if enter and enter.is_pressed:
+        return '\n'
+    return ''
+
+
+def select_profile(profiles_dir: Path, up=None, down=None, left=None, right=None, enter=None) -> tuple[Path, dict]:
     """Prompt user to select a profile from user_profiles using WASD."""
     profiles = sorted(profiles_dir.glob("*.json"))
     if not profiles:
@@ -141,15 +159,18 @@ def select_profile(profiles_dir: Path) -> tuple[Path, dict]:
         }
         return None, default_profile
 
-    print("\nSelect a profile to edit (w/s to navigate, Enter to select):")
+    
     selected_idx = 0
+    
     while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("\nSelect a profile to edit (Up/Down to navigate, Enter to select):")
         for i, profile in enumerate(profiles):
             marker = ">" if i == selected_idx else " "
             print(f"{marker} {profile.name}")
         sys.stdout.flush()
 
-        ch = get_key()
+        ch = get_input(up=up, down=down, right=right, left=left, enter=enter)
         if ch in ('\r', '\n'):
             try:
                 with open(profiles[selected_idx], 'r') as f:
@@ -183,17 +204,18 @@ def select_profile(profiles_dir: Path) -> tuple[Path, dict]:
         elif ch.lower() == 's' and selected_idx < len(profiles) - 1:
             selected_idx += 1
 
-def select_stem() -> str:
+def select_stem(up=None, down=None, left=None, right=None, enter=None) -> str:
     """Prompt user to select a stem using WASD."""
-    print("\nSelect a stem to edit (w/s to navigate, Enter to select):")
     selected_idx = 0
     while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("\nSelect a stem to edit (Up/Down to navigate, Enter to select):")
         for i, stem in enumerate(STEMS):
             marker = ">" if i == selected_idx else " "
             print(f"{marker} {stem.capitalize()}")
         sys.stdout.flush()
 
-        ch = get_key()
+        ch = get_input(up=up, down=down, right=right, left=left, enter=enter)
         if ch in ('\r', '\n'):
             print(f"\nSelected stem: {STEMS[selected_idx].capitalize()}")
             return STEMS[selected_idx]
@@ -202,15 +224,16 @@ def select_stem() -> str:
         elif ch.lower() == 's' and selected_idx < len(STEMS) - 1:
             selected_idx += 1
 
-def get_angle_input(current_angle: float, available_angles: list, subject: str) -> float:
+def get_angle_input(current_angle: float, available_angles: list, subject: str, up=None, down=None, left=None, right=None, enter=None) -> float:
     """Interactively adjust the azimuth angle using WASD with snapping and audio preview."""
-    print("\nAdjust the azimuth angle (w: +10°, s: -10°, d: +1°, a: -1°, p: preview, Enter to confirm):")
     angle = current_angle
     stimulus = generate_swept_sine(DURATION, FS)
     while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("\nAdjust the azimuth angle (Up: +10°, Down: -10°, Right: +1°, Left: -1°, Back: preview, Enter to confirm):")
         snapped_angle = snap_to_nearest_angle(angle, available_angles)
         print(f"Current angle: {angle:.1f}° (Snapped to: {snapped_angle:.1f}°)  ", end="", flush=True)
-        ch = get_key()
+        ch = get_input(up=up, down=down, right=right, left=left, enter=enter)
         if ch in ('\r', '\n'):
             print()
             return snapped_angle
@@ -249,10 +272,10 @@ def get_angle_input(current_angle: float, available_angles: list, subject: str) 
         else:
             print(f"\nUnrecognized key: '{ch}'. Use WASD, p, or Enter.")
 
-def edit_profile():
+def edit_profile(up=None, down=None, left=None, right=None, enter=None):
     """Main profile editing workflow."""
     print("=== Edit HRTF Profile Stem Directions ===")
-    profile_path, profile_data = select_profile(PROFILES_DIR)
+    profile_path, profile_data = select_profile(PROFILES_DIR, up=up, down=down, right=right, left=left, enter=enter)
     
     # Initialize stem_directions if not present
     if "stem_directions" not in profile_data:
@@ -266,9 +289,9 @@ def edit_profile():
         available_angles = list(range(-180, 181))  # Fallback to all integers
     
     while True:
-        stem = select_stem()
+        stem = select_stem(up=up, down=down, right=right, left=left, enter=enter)
         current_angle = profile_data["stem_directions"].get(stem, 0)
-        new_angle = get_angle_input(current_angle, available_angles, subject)
+        new_angle = get_angle_input(current_angle, available_angles, subject, up=up, down=down, right=right, left=left, enter=enter)
         profile_data["stem_directions"][stem] = new_angle
         
         print("\nCurrent stem directions:")
@@ -278,7 +301,7 @@ def edit_profile():
             print(f"  {s.capitalize()}: {snapped_angle:.1f}°")
         
         print("\nPress Enter to save and exit, or any other key to edit another stem.")
-        ch = get_key()
+        ch = get_input(up=up, down=down, right=right, left=left, enter=enter)
         if ch in ('\r', '\n'):
             break
     
