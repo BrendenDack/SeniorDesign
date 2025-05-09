@@ -17,6 +17,9 @@ from menu_app_modular.battery_monitor import get_battery_info
 import soundfile as sf
 from CalibrateV3 import run_calibration_function
 from editProfiles import edit_profile
+from PIL import Image, ImageDraw, ImageFont
+from firmware.LCD_2inch4_gpiozero import LCD_2inch4
+from pathlib import Path
 
 import smbus2
 
@@ -25,7 +28,7 @@ import smbus2
 # This is a module in gpiozero that lets us use "pretend" buttons so I can test without it crashing
 # It allows you to also manually set pin values for buttons to test without real hardware
 # Mock pins for testing - Remove if you have real buttons to test with
-gpio.Device.pin_factory = MockFactory()
+#gpio.Device.pin_factory = MockFactory()
 
 # GPIO buttons (optional for testing on hardware)
 try:
@@ -52,6 +55,13 @@ vol_up_pressed = vol_down_pressed = False
 selected_song = None
 song_paused = False
 Loaded_Profile = None
+# For LCD
+LCD = None
+SCREEN_WIDTH = 240
+SCREEN_HEIGHT = 320
+font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
+font_menu = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+ASSETS_PATH = Path("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/mm/assets")
 # For pages
 current_page = 0
 items_per_page = 5
@@ -368,6 +378,26 @@ def run_edit_profiles_wrapper():
 def play_button_wrapper():
     stt.play_button(selected_song)
 
+# Utility functions for screen
+def paste_image(img, filename, pos, resize=None):
+    try:
+        im = Image.open(ASSETS_PATH / filename).convert("RGBA")
+        if resize:
+            im = im.resize(resize)
+        img.paste(im, pos, im)
+        print(f"Pasted image: {filename}")
+    except Exception as e:
+        print(f"Could not load {filename}: %s", e)
+
+def update_display(img):
+    global LCD
+    try:
+        LCD.ShowImage(img)
+        time.sleep(0.01)
+        print("Updated display")
+    except Exception as e:
+        print("Failed to update display: %s", e)
+
 # This function dictionary is for storing functions as actions. In the form { "Action_Name" : function_name }
 function_dictionary = {
     # Default setup for function dictionary. Just add your name and function to use it in the submenus
@@ -387,9 +417,9 @@ function_dictionary = {
     "shuffle_song" : stt.toggle_shuffle
 }
 
-def handle_selection(stdscr, selected_option, h, w, current_menu_key):
+def handle_selection(selected_option, h, w, current_menu_key):
     # Global variable
-    global current_index, directory
+    global current_index, directory, LCD
     # Load labels, targets, and actions
     label = selected_option["label"] # Labels are just the name of the option, it's what shows on the screen
     target = selected_option.get("target") # Targets decide where the selection goes next, can be None
@@ -448,74 +478,63 @@ def handle_selection(stdscr, selected_option, h, w, current_menu_key):
             func = function_dictionary.get(action)
             if func:
                 try:
-                    curses.endwin()
                     output = func()
                 except Exception as e:
                     output = f"Python Error: {e}"
-                finally:
-                    stdscr = curses.initscr()
-                    curses.noecho()
-                    curses.cbreak()
-                    stdscr.keypad(True)
-                    stdscr.clear()
-                    curses.doupdate()
             else:
                 output = f"Function '{action}' not found"
         else:
             output = f"Unknown action type: {action_type}"
 
-        stdscr.clear()
         if output == None:
             output = "Finished Task"
         lines = str(output).split("\n")
+        img = Image.new("RGB", (SCREEN_HEIGHT, SCREEN_WIDTH), "WHITE")
+        draw = ImageDraw.Draw(img)
+        LCD.clear()
         for i, line in enumerate(lines):
             y = max(0, min(h - 1, h // 2 - len(lines) // 2 + i))
             x = max(0, min(w - 1, w // 2 - len(line) // 2))
-            try:
-                stdscr.addstr(y, x, line[:w - x])
-            except curses.error:
-                pass
-        stdscr.refresh()
+            #stdscr.addstr(y, x, line[:w - x])
+            draw.text((SCREEN_HEIGHT, SCREEN_WIDTH), line[:w - x])
+        update_display(img)
         time.sleep(5)
     else: # Target has no action attached
-        stdscr.clear() 
+        LCD.clear()
         message = f"You selected: {label}"
         y = max(0, min(h - 1, h // 2))
         x = max(0, min(w - 1, w // 2 - len(message) // 2))
-        try:
-            stdscr.addstr(y, x, message[:w - x])
-        except curses.error:
-            pass
-        stdscr.refresh()
+        #stdscr.addstr(y, x, message[:w - x])
+        draw.text((SCREEN_HEIGHT, SCREEN_WIDTH), line[:w - x])
         time.sleep(1)
 
 
-
-def draw_menu(stdscr):
+def draw_menu():
     # Global variables
     global current_index, up_pressed, down_pressed, select_pressed, back_pressed, vol_down_pressed, vol_up_pressed, GLOBAL_VOLUME
-
-    curses.curs_set(0) # Set curser to origin
-    stdscr.nodelay(True)
-    stdscr.keypad(True) # Enable keyboard for debug
-    curses.start_color() # Enable colors
-    curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_CYAN) # Default colors
+    global LCD
+    
 
     while True:
         # Clear screen and double check height and width. This allows for real-time resizing
-        stdscr.clear()
-        h, w = stdscr.getmaxyx()
+        img = Image.new("RGB", (SCREEN_HEIGHT, SCREEN_WIDTH), "WHITE")
+        draw = ImageDraw.Draw(img)
+        # update_display(img)
         
         # --- Time Display ---
         now = datetime.now()
         time_str = now.strftime("%I:%M:%S %p")  # e.g., 04:15:22 PM
-        stdscr.addstr(0, w - len(time_str) - 1, time_str)
+        draw.text((SCREEN_WIDTH-len(time_str)-12, 5), time_str, font=font_menu, fill="BLACK")
+        # stdscr.addstr(0, w - len(time_str) - 1, time_str)
         
         # Battery stuff but I don't have the PSU so I'll touch it later 
         # will return Int or truncated calculated battery percentage
         battery = get_battery_info()
-        stdscr.addstr(1, w - len(battery) - 1, str(int(battery[1])) + "%") # Battery percentage
-        stdscr.addstr(2, w - len(str(GLOBAL_VOLUME)) - 1, str(GLOBAL_VOLUME) + "%") # Volume Battery percentage
+        # stdscr.addstr(1, w - len(battery) - 1, str(int(battery[1])) + "%") # Battery percentage
+        # stdscr.addstr(2, w - len(str(GLOBAL_VOLUME)) - 1, str(GLOBAL_VOLUME) + "%") # Volume Battery percentage
+        draw.text((SCREEN_WIDTH-len(str(int(battery[1]))), 22), str(int(battery[1])) + "%", font=font_menu, fill="BLACK")
+        # volume 
+        draw.text((SCREEN_WIDTH-len(str(GLOBAL_VOLUME))-1, 39), str(GLOBAL_VOLUME) + "%", font=font_menu, fill="BLACK")
         
 
         # Menu variables
@@ -524,38 +543,27 @@ def draw_menu(stdscr):
         options = current_menu["options"] # Get options section for the page
         title = current_menu["title"] # Get Title for the page
 
-        stdscr.addstr(1, w // 2 - len(title) // 2, title, curses.A_BOLD) # Write title to middle of screen
+        #stdscr.addstr(1, w // 2 - len(title) // 2, title, curses.A_BOLD) 
+        # # Write title to middle of screen
+        draw.text((SCREEN_WIDTH/2 - len(title)/2, 5), title, font=font_menu, fill="BLACK")
 
         # Iterate through all options and print their labels to the middle of the screen
         for idx, option in enumerate(options):
             label = option["label"]
-            x = w // 2 - len(label) // 2
-            y = h // 2 - len(options) // 2 + idx
+            x = SCREEN_WIDTH * 0.5 - len(label)/2
+            y = (SCREEN_HEIGHT/4 + len(options)/2) + (idx * 17)
             if idx == current_index: # Decides which option is selected and colors it
-                stdscr.attron(curses.color_pair(1))
-                stdscr.addstr(y, x, label) # Write colored option to the screen
-                stdscr.attroff(curses.color_pair(1))
+                #stdscr.attron(curses.color_pair(1))
+                #stdscr.addstr(y, x, label) # Write colored option to the screen
+                #stdscr.attroff(curses.color_pair(1))
+                draw.text((x,y), label, font=font_menu, fill="RED")
             else:
-                stdscr.addstr(y, x, label) # write non-colored options to screen
+                #stdscr.addstr(y, x, label) # write non-colored options to screen
+                draw.text((x,y), label, font=font_menu, fill="BLACK")
 
-        stdscr.refresh() # Refresh to push changes to screen
-
-        # Keyboard Navigation for when there are no hardware buttons
-        try:
-            key = stdscr.getch()
-        except Exception:
-            key = -1
-
-        # Exactly the same logic as the hardware buttons, but using keyboard for testing
-        if key == curses.KEY_UP:
-            current_index = (current_index - 1) % len(options)
-        elif key == curses.KEY_DOWN:
-            current_index = (current_index + 1) % len(options)
-        elif key in [curses.KEY_ENTER, ord('\n'), ord('\r')]:
-            selected_option = options[current_index]
-            handle_selection(stdscr, selected_option, h, w, current_menu_key)
-        elif key in [curses.KEY_BACKSPACE, 127]:
-            start_voice()
+        #stdscr.refresh() # Refresh to push changes to screen
+        img = img.rotate(90, expand=True)
+        update_display(img)
 
         # GPIO button input
         # Move up through options
@@ -575,7 +583,7 @@ def draw_menu(stdscr):
         # If select button is pressed, select the current index and use handle_selection to load next screen
         if SELECT_BUTTON and SELECT_BUTTON.is_pressed and not select_pressed:
             selected_option = options[current_index]
-            handle_selection(stdscr, selected_option, h, w, current_menu_key)
+            handle_selection(selected_option, SCREEN_HEIGHT, SCREEN_WIDTH, current_menu_key)
             select_pressed = True
         elif SELECT_BUTTON and not SELECT_BUTTON.is_pressed:
             select_pressed = False
@@ -608,7 +616,8 @@ def draw_menu(stdscr):
             vol_down_pressed = False      
        
         # Sleep so the screen doesn't freak out from too fast refreshing
-        time.sleep(0.05)
+        # img = img.rotate(270, expand=True)
+        time.sleep(0.5)
 
  
    
@@ -623,7 +632,12 @@ def volume_button_wrapper(increment, GLOBAL_VOLUME):
 
 def main():
     try:
-        curses.wrapper(draw_menu) # draw_menu contains the main loop for this file
+        global LCD
+        LCD = LCD_2inch4()
+        LCD.Init()
+        LCD.clear()
+        draw_menu()
+        #curses.wrapper(draw_menu) # draw_menu contains the main loop for this file
     except KeyboardInterrupt:
         pass
 

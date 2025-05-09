@@ -25,7 +25,7 @@ import smbus2
 # This is a module in gpiozero that lets us use "pretend" buttons so I can test without it crashing
 # It allows you to also manually set pin values for buttons to test without real hardware
 # Mock pins for testing - Remove if you have real buttons to test with
-gpio.Device.pin_factory = MockFactory()
+#gpio.Device.pin_factory = MockFactory()
 
 # GPIO buttons (optional for testing on hardware)
 try:

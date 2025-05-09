@@ -1,9 +1,9 @@
 
 import time
-from . import lcdconfig
+from . import lcdconfig_gpiozero
 import numbers
 
-class LCD_2inch4(lcdconfig.RaspberryPi):
+class LCD_2inch4(lcdconfig_gpiozero.RaspberryPi):
 
     width = 240
     height = 320 
