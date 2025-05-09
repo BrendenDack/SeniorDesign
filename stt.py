@@ -140,6 +140,18 @@ def play_song(song_name):
         print("Could not find the song.")
         speak("Sorry, I could not find that song.")
 
+def play_button():
+    global playlist, current_index
+    playlist[:] = song_files
+    current_index = 0
+    #if current_index < len(playlist):
+    #current_index = (current_index - 1) % len(playlist)
+    song_path = playlist[current_index]
+    media = instance.media_new(song_path)
+    player.set_media(media)
+    player.play()
+    
+
 # Pause function
 def pause_song():
     player.pause()

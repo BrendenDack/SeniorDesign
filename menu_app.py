@@ -16,6 +16,7 @@ from datetime import datetime
 from menu_app_modular.battery_monitor import get_battery_info
 import soundfile as sf
 from CalibrateV3 import run_calibration_function
+from editProfiles import edit_profile
 
 import smbus2
 
@@ -47,6 +48,8 @@ menu_stack = ["main"]
 current_index = 0
 up_pressed = down_pressed = select_pressed = back_pressed = False
 selected_song = None
+song_paused = False
+Loaded_Profile = None
 # For pages
 current_page = 0
 items_per_page = 5
@@ -76,17 +79,31 @@ menus = {
     },
     "submenu_songs": {
         "title": "Songs",
-        "options": [
+        "options": [ # These will be updated dynamically when entering the menu
             {"label": "Songs", "target": None},
             {"label": "Back", "target": "back"}
         ]
     },
     "submenu_spatial_songs": {
         "title": "Spatial Songs",
-        "options": [
+        "options": [ # These will be updated dynamically when entering the menu
             {"label": "Songs", "target": None},
             {"label": "Back", "target": "back"}
         ]
+    },
+    "submenu_profiles": {
+        "title": "Spatial Profiles",
+        "options": [ # These will be updated dynamically when entering the menu
+            {"label": "Songs", "target": None},
+            {"label": "Back", "target": "back"}
+        ]
+    },
+    "submenu_profile_options": {
+    "title": "Load This Profile?",
+    "options": [  
+        {"label": "Yes", "target": "submenu_settings", "action_type": "python", "action": "select_profile"},
+        {"label": "No", "target": "back"},
+    ]
     },
     "submenu_song_options": {
     "title": "Song Options",
@@ -108,7 +125,8 @@ menus = {
         "title": "Settings",
         "options": [
             {"label": "Change Time", "target": None, "action" : "date", "action_type" : "shell"},
-            {"label": "Change Profile", "target": None, "action" : ""},
+            {"label": "Change Profile", "target": "submenu_profiles", "action_type" : "static"},
+            {"label": "Edit Profile", "target": None, "action" : "edit_profiles", "action_type" : "python"},
             {"label": "Run Calibration", "target": None, "action" : "run_calibration", "action_type" : "python"},
             {"label": "Back", "target": "back"}
         ]
@@ -116,8 +134,12 @@ menus = {
     "submenu_Music_Player": {
         "title": "Music Player",
         "options": [
-            {"label": "Current Track", "target": None},
-            {"label": "Time Remaining", "target": None},
+            {"label": "Play Music", "target": None, "action_type" : "python", "action" : "play_song"},
+            {"label": "Play/Pause Music", "target": None, "action_type" : "python", "action" : "play_pause_song"},
+            {"label": "Skip Song", "target": None, "action_type" : "python", "action" : "skip_song"},
+            {"label": "Previous Song", "target": None, "action_type" : "python", "action" : "unskip_song"},
+            {"label": "Loop Music", "target": None, "action_type" : "python", "action" : "loop_song"},
+            {"label": "Shuffle Music", "target": None, "action_type" : "python", "action" : "shuffle_song"},
             {"label": "Back", "target": "back"}
         ]
     }
@@ -137,7 +159,7 @@ def play_spatial_song():
             stems = pickle.load(f)
             print(stems)
         print("Apply HRTFs")
-        spatial_stems = apply_bulk_hrtf(stems)
+        spatial_stems = apply_bulk_hrtf(stems, Loaded_Profile=Loaded_Profile)
         print("Generate summed song")
         final_output = summed_signal(spatial_stems['vocals'], spatial_stems['bass'], spatial_stems['other'], spatial_stems['drums'])
         print("Write Stems to flac")
@@ -152,7 +174,42 @@ def play_spatial_song():
         except PermissionError:
             print("No permission to delete the file.")
 
+# Function for loading music files dynamically into pages
+def load_profile_files(directory="user_profiles"):
+    # Global Variables
+    global all_music_files, current_page
+    page = 0
 
+    profile_folder = directory # Path to music folder
+    try:
+        files = os.listdir(profile_folder) # Load folder
+        profiles = sorted([f for f in files if f.lower().endswith(".json")])
+        current_page = page # Select starting page from parameter variable
+
+        # Determine how many songs to put per page. Adjustable from global variable "items_per_page"
+        start = page * items_per_page
+        end = start + items_per_page
+        current_files = profiles[start:end]
+
+        # Dynamically load songs into options so they are displayed on the screen
+        options = [{"label": f, "target": None, "action": "select_profile", "action_type": "python"} for f in current_files]
+
+        # Determine if Previous Page button is shown
+        if page > 0:
+            options.append({"label": "Previous Page", "target": "prev_page"})
+        
+        # Determine if Next Page button is shown
+        if end < len(all_music_files):
+            options.append({"label": "Next Page", "target": "next_page"})
+
+        # Back button to leave library added to end
+        options.append({"label": "Back", "target": "back"})
+        menus["submenu_profiles"]["options"] = options
+    except Exception as e:
+        menus["submenu_profiles"]["options"] = [
+            {"label": f"Error loading files: {e}", "target": "back"},
+            {"label": "Back", "target": "back"}
+        ]
 
 # Function for loading music files dynamically into pages
 def load_music_files(directory="Music", page=0):
@@ -195,7 +252,13 @@ def load_music_files(directory="Music", page=0):
         elif directory == "Spatial":
             menus["submenu_spatial_songs"]["options"] = options
     except Exception as e:
-        menus["submenu_spatial_songs"]["options"] = [
+        if directory == "Music":
+            menus["submenu_songs"]["options"] = [
+                {"label": f"Error loading files: {e}", "target": "back"},
+                {"label": "Back", "target": "back"}
+            ]
+        elif directory == "Spatial":
+            menus["submenu_spatial_songs"]["options"] = [
             {"label": f"Error loading files: {e}", "target": "back"},
             {"label": "Back", "target": "back"}
         ]
@@ -231,9 +294,27 @@ def clear_console(): # For manually clearing the console
 def run_spatial_audio_helper():
     run_spatial_audio(f"Music/{selected_song}")
 
-def play_song_wrapper():
-    stt.play_song()
+def calibration_wrapper():
+    #run_calibration_function(up=UP_BUTTON, down=DOWN_BUTTON, left=LEFT_BUTTON, right=RIGHT_BUTTON, enter=SELECT_BUTTON)
+    run_calibration_function()
+
+def change_profile_wrapper():
+    global current_index
+    Loaded_Profile = selected_song
+    temp_str = Loaded_Profile.removesuffix(".json")
+    current_index = 0
     
+    while len(menu_stack) > 2:
+            menu_stack.pop()
+
+    return f"Profile {temp_str} loaded Successfully"
+
+def play_pause():
+    if song_paused == True:
+        stt.resume_song()
+    elif song_paused == False:
+        stt.pause_song()
+
     
 def run_calibration_wrapper():
     """Wrapper to call run_calibration_function with GPIO buttons."""
@@ -254,14 +335,18 @@ function_dictionary = {
     # Default setup for function dictionary. Just add your name and function to use it in the submenus
     "default_function" : clear_console, 
     "start_voice" : start_voice,
-    "play_song" : play_song_wrapper,
-    "run_calibration" : run_calibration_wrapper,
+    "play_song" : stt.play_button,
+    "run_calibration" : run_calibration_function,
     "apply_spatial_audio" : run_spatial_audio_helper,
-    "play_spatial_song" : play_spatial_song
+    "play_spatial_song" : play_spatial_song,
+    "edit_profiles" : edit_profile,
+    "select_profile" : change_profile_wrapper,
+    "play_pause_song" : play_pause,
+    "skip_song" : stt.next_song,
+    "unskip_song" : stt.previous_song,
+    "loop_song" : stt.toggle_loop,
+    "shuffle_song" : stt.toggle_shuffle
 }
-
-
-
 
 def handle_selection(stdscr, selected_option, h, w, current_menu_key):
     # Global variable
@@ -292,6 +377,9 @@ def handle_selection(stdscr, selected_option, h, w, current_menu_key):
         if selected_option.get("action_type") == "dynamic" and target == "submenu_spatial_songs":
             directory = "Spatial"
             load_music_files(directory, page=0)
+        if selected_option.get("action_type") == "static":
+            directory = "user_profiles"
+            load_profile_files(directory=directory)
         menu_stack.append(target)
         current_index = 0
     elif current_menu_key == "submenu_songs" and label.lower() not in ["next page", "previous page", "back"]:
@@ -304,6 +392,11 @@ def handle_selection(stdscr, selected_option, h, w, current_menu_key):
         # User selected a song
         selected_song = label  # Save it for later
         menu_stack.append("submenu_spatial_options")
+        current_index = 0
+    elif current_menu_key == "submenu_profiles" and label.lower() not in ["next page", "previous page", "back"]:
+        # User selected a song
+        selected_song = label  # Save it for later
+        menu_stack.append("submenu_profile_options")
         current_index = 0
     elif action: # Load the action and run it
         if action_type == "shell":# If the loaded action is of type shell, run the shell command using a subprocess. This is done because curses is running in our current shell, so we need a different one
