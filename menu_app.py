@@ -156,7 +156,7 @@ def play_spatial_song():
             stems = pickle.load(f)
             print(stems)
         print("Apply HRTFs")
-        spatial_stems = apply_bulk_hrtf(stems)
+        spatial_stems = apply_bulk_hrtf(stems, Loaded_Profile=Loaded_Profile)
         print("Generate summed song")
         final_output = summed_signal(spatial_stems['vocals'], spatial_stems['bass'], spatial_stems['other'], spatial_stems['drums'])
         print("Write Stems to flac")
