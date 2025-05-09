@@ -25,7 +25,7 @@ import smbus2
 # This is a module in gpiozero that lets us use "pretend" buttons so I can test without it crashing
 # It allows you to also manually set pin values for buttons to test without real hardware
 # Mock pins for testing - Remove if you have real buttons to test with
-#gpio.Device.pin_factory = MockFactory()
+gpio.Device.pin_factory = MockFactory()
 
 # GPIO buttons (optional for testing on hardware)
 try:
@@ -110,7 +110,7 @@ menus = {
     "submenu_song_options": {
     "title": "Song Options",
     "options": [  # These will be updated dynamically when entering the menu
-        {"label": "Play Song", "target": None, "action_type": "python", "action": "play_song"},
+        {"label": "Play Song", "target": None, "action_type": "python", "action": "play_single_song"},
         {"label": "Apply Spatial Audio", "target": None, "action": "apply_spatial_audio", "action_type": "python"},
         {"label": "Back", "target": "back"}
     ]
@@ -365,12 +365,16 @@ def run_edit_profiles_wrapper():
         output = f"Calibration error: {str(e)}"
     return output
 
+def play_button_wrapper():
+    stt.play_button(selected_song)
+
 # This function dictionary is for storing functions as actions. In the form { "Action_Name" : function_name }
 function_dictionary = {
     # Default setup for function dictionary. Just add your name and function to use it in the submenus
     "default_function" : clear_console, 
     "start_voice" : start_voice,
     "play_song" : stt.play_button,
+    "play_single_song" : play_button_wrapper,
     "run_calibration" : run_calibration_wrapper,
     "apply_spatial_audio" : run_spatial_audio_helper,
     "play_spatial_song" : play_spatial_song,

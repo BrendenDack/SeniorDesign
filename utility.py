@@ -9,6 +9,7 @@ from calibrateUserProfile import apply_hrtf
 from pydub import AudioSegment
 import os
 import pickle
+import h5py
 import json
 from pathlib import Path
 import h5py
@@ -151,32 +152,34 @@ def run_spatial_audio_old(file_name):
     print(file_name)
     name_only, ext = os.path.splitext(only_file_name)
     print(name_only)
-    output_filepath = "Spatial/" + name_only + ".pkl"
+    output_filepath = "Spatial/" + name_only + ".h5"
     print(output_filepath)
     if os.path.exists(output_filepath):
-        print("attempting to load pickle file")
-        with open(output_filepath, 'rb') as f:
-            estimates_numpy = pickle.load(f)
+        print("Separated HDF5 file found. Skipping processing.")
+       
     else:
-        print("No pickle file: Starting Seperation")
+        print("No HDF5 file: Starting Seperation")
         
         estimates_numpy = separate_sources(file_name)
 
-        print("Trying to save pickle file")
+        print("Trying to save HDF5 file")
         # Save stems to pickle file
-        with open(f'Spatial/{name_only}.pkl', 'wb') as f:
-            pickle.dump(estimates_numpy, f)
+        with h5py.File(output_filepath, "w") as f:
+            f.create_dataset("vocals", data=estimates_numpy['vocals'], compression="gzip")
+            f.create_dataset("drums", data=estimates_numpy['drums'], compression="gzip")
+            f.create_dataset("bass", data=estimates_numpy['bass'], compression="gzip")
+            f.create_dataset("other", data=estimates_numpy['other'], compression="gzip")
 
     return "Song successfully converted."
 
-def apply_bulk_hrtf_old(estimates_numpy, Loaded_Profile):
+def apply_bulk_hrtf_old(stems_directory, Loaded_Profile):
     
     try:
         with open(f"{PROFILES_DIR}/{Loaded_Profile}", 'r') as f:
             profile_data = json.load(f)
         if not all(k in profile_data for k in ['hrtf_subject', 'effective_radius']):
             print(f"Invalid profile: {Loaded_Profile} Missing required fields.")
-            return None, {
+            profile_data = {
                 "hrtf_subject": "003",
                 "effective_radius": 8.5,
                 "head_width": 15.2,
@@ -190,7 +193,7 @@ def apply_bulk_hrtf_old(estimates_numpy, Loaded_Profile):
         print(f"  Effective Radius: {profile_data['effective_radius']:.2f} cm")
     except json.JSONDecodeError:
         print(f"Error: {Loaded_Profile} is not a valid JSON file.")
-        return None, {
+        profile_data = {
             "hrtf_subject": "003",
             "effective_radius": 8.5,
             "head_width": 15.2,
@@ -200,19 +203,24 @@ def apply_bulk_hrtf_old(estimates_numpy, Loaded_Profile):
 
     if "stem_directions" not in profile_data:
         profile_data["stem_directions"] = {"bass": 0, "vocals": 0, "drums": 0, "other": 0}
-
+    
+    print("Apply HRTFs")
     angles = profile_data["stem_directions"]
     test_subject = profile_data['hrtf_subject']
     print("Create Stems dict")
     spacial_stems = {'vocals' : 0, 'drums' : 0, 'bass' : 0, 'other' : 0}
-    print("Vocals")
-    spacial_stems['vocals'] = apply_hrtf(estimates_numpy['vocals'], angles['vocals'], test_subject)
-    print("drums")
-    spacial_stems['drums'] = apply_hrtf(estimates_numpy['drums'], angles['drums'], test_subject)
-    print("bass")
-    spacial_stems['bass'] = apply_hrtf(estimates_numpy['bass'], angles['bass'], test_subject)
-    print("other")
-    spacial_stems['other'] = apply_hrtf(estimates_numpy['other'], angles['other'], test_subject)
+
+
+    with h5py.File(stems_directory, "r") as f:
+        for stem_name in ["vocals", "drums", "bass", "other"]:
+            print(f"Processing {stem_name}")
+            stem = f[stem_name][:]
+            angle = angles[stem_name]
+            processed = apply_hrtf(stem, angle, test_subject)
+            spacial_stems[stem_name] = processed
+            del stem
+
+
     print("Finished HRTFS")
     
     return spacial_stems
