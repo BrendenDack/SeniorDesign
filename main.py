@@ -367,6 +367,14 @@ def run_edit_profiles_wrapper():
 
 def play_button_wrapper():
     stt.play_button(selected_song)
+    #this is the new function for threading to be able to track when a song ended and go on to the next
+    def monitor_song():
+        while True:
+            stt.checkFinish()
+            time.sleep(0.5)
+            
+    thread = threading.Thread(target=monitor_song, daemon=True)
+    thread.start()
 
 # This function dictionary is for storing functions as actions. In the form { "Action_Name" : function_name }
 function_dictionary = {
