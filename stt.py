@@ -141,7 +141,7 @@ def play_song(song_name):
         print("Could not find the song.")
         speak("Sorry, I could not find that song.")
 
-def play_button(): 
+def play_buttons(): #this is for playing general playlist
     global playlist, current_index
     playlist[:] = song_files
     current_index = 0 
