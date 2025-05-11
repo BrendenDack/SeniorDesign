@@ -17,7 +17,7 @@ CHUNK = 8000  # 512 #8000 original chunk size
 WIDTH = 2
 
 # Path for music folder (REPLACE WITH YOUR PATH BRENDEN, ensure you use / not \)
-MUSIC_FOLDER = '/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/Music'
+MUSIC_FOLDER = '/home/Sara/RPI-Sara/code/Music'
 
 # Initialize Vosk model
 model = Model('vosk-model-small-en-us-0.15')
@@ -68,6 +68,7 @@ for root, dirs, files in os.walk(MUSIC_FOLDER):
 # Playlist and state
 playlist = []
 current_index = 0
+last_played_index = -1
 loop = False
 shuffle = False
 shuffle_history = []
@@ -150,32 +151,41 @@ def play_button():
     player.play()
 
 def play_button(selected_song): 
-    global playlist, current_index
+    global playlist, current_index,last_played_index,instance,player
     playlist[:] = song_files
-    current_index = 0 
-    song_path = playlist[current_index]
-    media = instance.media_new(f"Music/{selected_song}")
-    player.set_media(media)
-    player.play()
-
-    # if player.get_state() == vlc.State.Ended and playlist:
-    #     if loop:
-    #         song_path = playlist[current_index]
-    #         media = instance.media_new(f"Music/{selected_song}")
-    #         player.set_media(media)
-    #         player.play()
-    #     else:
-    #         next_song()
     
-    while player.get_state() != vlc.State.Ended and not playlist:
-        pass
-    if loop:
-            song_path = playlist[current_index]
-            media = instance.media_new(f"Music/{selected_song}")
+    # Find full path of the selected song and plays it
+    for i, path in enumerate(playlist):
+        if selected_song.lower() in os.path.basename(path).lower():
+            last_played_index = current_index  # tracck the last played song before switching
+            current_index = i
+            media = instance.media_new(path)
             player.set_media(media)
             player.play()
+            print(f"Now playing: {os.path.basename(path)}")
+            break
     else:
-        next_song()
+        print(f"Song {selected_song} not found in playlist.")
+    
+
+
+def checkcheck(): #function called in menu_app.py for threading purposes for next song to play 
+    while True:
+        checkFinish()
+
+def checkFinish(): #this checks when the vlc has ended 
+    if player.get_state() == vlc.State.Ended and playlist:
+                if loop:
+                    song_path = playlist[current_index]
+                    media = instance.media_new(song_path)
+                    player.set_media(media)
+                    player.play()
+                else:
+                    next_song()
+        
+
+
+
 #def play_button(selected_song): 
     
     #media = instance.media_new(f"Music/{selected_song}")
@@ -194,10 +204,11 @@ def resume_song():
 
 # Next song function
 def next_song():
-    global current_index, shuffle_history
+    global current_index, shuffle_history, last_played_index
     if not playlist:
         speak("Playlist is empty.")
         return
+    last_played_index = current_index
 
     if shuffle:
         shuffle_history.append(current_index)
@@ -217,7 +228,7 @@ def next_song():
 
 # Previous song function
 def previous_song():
-    global current_index, shuffle_history
+    global current_index, shuffle_history, last_played_index
     if not playlist:
         speak("Playlist is empty.")
         return
@@ -225,13 +236,17 @@ def previous_song():
     if shuffle and shuffle_history:
         current_index = shuffle_history.pop()
     else:
-        current_index = (current_index - 1) % len(playlist)
+        if last_played_index != -1:
+            current_index = last_played_index
+        else:
+            current_index = (current_index - 1) % len(playlist)
 
     song_path = playlist[current_index]
     media = instance.media_new(song_path)
     player.set_media(media)
     player.play()
     print(f"Playing previous song: {os.path.basename(song_path)}")
+    last_played_index = current_index # update the last song that was played
     #speak("Playing previous song.")
 
 # Toggle loop mode
@@ -263,11 +278,7 @@ def restore_volume():
 def update_volume(increment ,GLOBAL_VOLUME):
     player.audio_set_volume(GLOBAL_VOLUME + increment)
     
-    return GLOBAL_VOLUME
-    
-
-
-    
+    return GLOBAL_VOLUME    
 
 def start_voice_recognition():
     global player, playlist
