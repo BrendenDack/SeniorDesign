@@ -381,7 +381,7 @@ function_dictionary = {
     # Default setup for function dictionary. Just add your name and function to use it in the submenus
     "default_function" : clear_console, 
     "start_voice" : start_voice,
-    "play_song" : stt.play_button,
+    "play_song" : stt.play_buttons,
     "play_single_song" : play_button_wrapper,
     "run_calibration" : run_calibration_wrapper,
     "apply_spatial_audio" : run_spatial_audio_helper,
