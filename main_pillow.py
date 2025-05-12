@@ -21,9 +21,6 @@ from PIL import Image, ImageDraw, ImageFont
 from firmware.LCD_2inch4_gpiozero import LCD_2inch4
 from pathlib import Path
 
-import smbus2
-
-
 
 # This is a module in gpiozero that lets us use "pretend" buttons so I can test without it crashing
 # It allows you to also manually set pin values for buttons to test without real hardware
