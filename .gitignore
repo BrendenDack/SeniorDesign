@@ -1,6 +1,5 @@
 Music/*
 !.temp
-user_profiles/*
 Spatial/*
 __pycache__
 menu_renderer.log
