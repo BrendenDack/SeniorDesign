@@ -11,6 +11,7 @@ import pyaudio
 import platform
 import os
 import time
+from PIL import Image, ImageDraw, ImageFont
 
 # Configuration
 PROFILES_DIR = Path("user_profiles")
@@ -19,6 +20,10 @@ STEMS = ["bass", "vocals", "drums", "other"]
 FS = 48000  # Match calibrateV2.py
 DURATION = 1.5
 SUPPRESS_ERRORS = True  # Match calibrateV2.py
+SCREEN_HEIGHT = 320
+SCREEN_WIDTH = 240
+font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
+font_menu = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
 
 def get_available_angles(hrtf_path: Path, subject: str) -> list:
     """Load available angles for a subject from HRIR files."""
@@ -144,12 +149,9 @@ def get_input(up=None, down=None, left=None, right=None, enter=None) -> str:
         return '\n'
     return ''
 
-
-def select_profile(profiles_dir: Path, up=None, down=None, left=None, right=None, enter=None) -> tuple[Path, dict]:
-    """Prompt user to select a profile from user_profiles using WASD."""
+def select_profile(profiles_dir: Path, up=None, down=None, left=None, right=None, enter=None, lcd=None) -> tuple[Path, dict]:
     profiles = sorted(profiles_dir.glob("*.json"))
     if not profiles:
-        print("No profiles found in user_profiles/. Creating default profile.")
         default_profile = {
             "hrtf_subject": "003",
             "effective_radius": 8.5,
@@ -159,24 +161,41 @@ def select_profile(profiles_dir: Path, up=None, down=None, left=None, right=None
         }
         return None, default_profile
 
-    
     selected_idx = 0
-    
-    while True:
-        os.system('cls' if os.name == 'nt' else 'clear')
-        print("\nSelect a profile to edit (Up/Down to navigate, Enter to select):")
-        for i, profile in enumerate(profiles):
-            marker = ">" if i == selected_idx else " "
-            print(f"{marker} {profile.name}")
-        sys.stdout.flush()
 
+    # Setup for drawing
+    HEIGHT, WIDTH = 240, 320
+    font = ImageFont.load_default()
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 14)
+    except:
+        pass  # Fallback to default
+
+    def draw_screen():
+        image = Image.new("RGB", (WIDTH, HEIGHT), "WHITE")
+        draw = ImageDraw.Draw(image)
+        title = "Select a profile:"
+        draw.text((10, 10), title, font=font, fill="BLACK")
+
+        start_y = 40
+        line_height = 20
+        for i, profile in enumerate(profiles):
+            y = start_y + i * line_height
+            marker = ">" if i == selected_idx else " "
+            text = f"{marker} {profile.name[:26]}"  # clip name if too long
+            draw.text((10, y), text, font=font, fill="RED" if i == selected_idx else "BLACK")
+        image = image.rotate(90, expand=True)
+        lcd.ShowImage(image)
+
+    while True:
+        draw_screen()
         ch = get_input(up=up, down=down, right=right, left=left, enter=enter)
+
         if ch in ('\r', '\n'):
             try:
                 with open(profiles[selected_idx], 'r') as f:
                     profile_data = json.load(f)
                 if not all(k in profile_data for k in ['hrtf_subject', 'effective_radius']):
-                    print(f"Invalid profile {profiles[selected_idx].name}: Missing required fields.")
                     return None, {
                         "hrtf_subject": "003",
                         "effective_radius": 8.5,
@@ -184,14 +203,8 @@ def select_profile(profiles_dir: Path, up=None, down=None, left=None, right=None
                         "head_length": 19.0,
                         "stem_directions": {"bass": 0, "vocals": 0, "drums": 0, "other": 0}
                     }
-                print(f"\nSelected profile: {profiles[selected_idx].name}")
-                print(f"  HRTF Subject: {profile_data['hrtf_subject']} ({'Female' if profile_data['hrtf_subject'] == '019' else 'Male'})")
-                print(f"  Head Width: {profile_data.get('head_width', 15.2):.2f} cm")
-                print(f"  Head Length: {profile_data.get('head_length', 19.0):.2f} cm")
-                print(f"  Effective Radius: {profile_data['effective_radius']:.2f} cm")
                 return profiles[selected_idx], profile_data
             except json.JSONDecodeError:
-                print(f"Error: {profiles[selected_idx].name} is not a valid JSON file.")
                 return None, {
                     "hrtf_subject": "003",
                     "effective_radius": 8.5,
@@ -199,54 +212,75 @@ def select_profile(profiles_dir: Path, up=None, down=None, left=None, right=None
                     "head_length": 19.0,
                     "stem_directions": {"bass": 0, "vocals": 0, "drums": 0, "other": 0}
                 }
-        elif ch.lower() == 'w' and selected_idx > 0:
+        elif ch == 'w' and selected_idx > 0:
             selected_idx -= 1
-        elif ch.lower() == 's' and selected_idx < len(profiles) - 1:
+        elif ch == 's' and selected_idx < len(profiles) - 1:
             selected_idx += 1
 
-def select_stem(up=None, down=None, left=None, right=None, enter=None) -> str:
-    """Prompt user to select a stem using WASD."""
-    selected_idx = 0
-    while True:
-        os.system('cls' if os.name == 'nt' else 'clear')
-        print("\nSelect a stem to edit (Up/Down to navigate, Enter to select):")
-        for i, stem in enumerate(STEMS):
-            marker = ">" if i == selected_idx else " "
-            print(f"{marker} {stem.capitalize()}")
-        sys.stdout.flush()
 
+def select_stem(up=None, down=None, left=None, right=None, enter=None, lcd=None) -> str:
+    selected_idx = 0
+    HEIGHT, WIDTH = 240, 320
+    font = font_menu  # Reuse existing
+
+    def draw_screen():
+        img = Image.new("RGB", (WIDTH, HEIGHT), "WHITE")
+        draw = ImageDraw.Draw(img)
+        draw.text((10, 10), "Select a stem to edit:", font=font, fill="BLACK")
+
+        for i, stem in enumerate(STEMS):
+            y = 40 + i * 30
+            color = "RED" if i == selected_idx else "BLACK"
+            marker = ">" if i == selected_idx else " "
+            draw.text((10, y), f"{marker} {stem.capitalize()}", font=font, fill=color)
+
+        img = img.rotate(90, expand=True)
+        lcd.ShowImage(img)
+
+    while True:
+        draw_screen()
         ch = get_input(up=up, down=down, right=right, left=left, enter=enter)
         if ch in ('\r', '\n'):
-            print(f"\nSelected stem: {STEMS[selected_idx].capitalize()}")
             return STEMS[selected_idx]
-        elif ch.lower() == 'w' and selected_idx > 0:
+        elif ch == 'w' and selected_idx > 0:
             selected_idx -= 1
-        elif ch.lower() == 's' and selected_idx < len(STEMS) - 1:
+        elif ch == 's' and selected_idx < len(STEMS) - 1:
             selected_idx += 1
 
-def get_angle_input(current_angle: float, available_angles: list, subject: str, up=None, down=None, left=None, right=None, enter=None) -> float:
-    """Interactively adjust the azimuth angle using WASD with snapping and audio preview."""
+
+def get_angle_input(current_angle: float, available_angles: list, subject: str, up=None, down=None, left=None, right=None, enter=None, lcd=None) -> float:
     angle = current_angle
     stimulus = generate_swept_sine(DURATION, FS)
+    HEIGHT, WIDTH = 240, 320
+    font = font_menu
+
+    def draw_screen():
+        img = Image.new("RGB", (WIDTH, HEIGHT), "WHITE")
+        draw = ImageDraw.Draw(img)
+        draw.text((10, 10), "Adjust Azimuth Angle", font=font, fill="BLACK")
+        draw.text((10, 50), f"Current: {angle:.1f}°", font=font, fill="BLUE")
+        draw.text((10, 80), f"Snapped: {snap_to_nearest_angle(angle, available_angles):.1f}°", font=font, fill="GREEN")
+        draw.text((10, 120), "W/S: ±10°  A/D: ±1°", font=font, fill="BLACK")
+        draw.text((10, 150), "P: Preview", font=font, fill="BLACK")
+        draw.text((10, 180), "Enter to Confirm", font=font, fill="BLACK")
+        img = img.rotate(90, expand=True)
+        lcd.ShowImage(img)
+
     while True:
-        os.system('cls' if os.name == 'nt' else 'clear')
-        print("\nAdjust the azimuth angle (Up: +10°, Down: -10°, Right: +1°, Left: -1°, Back: preview, Enter to confirm):")
-        snapped_angle = snap_to_nearest_angle(angle, available_angles)
-        print(f"Current angle: {angle:.1f}° (Snapped to: {snapped_angle:.1f}°)  ", end="", flush=True)
+        draw_screen()
         ch = get_input(up=up, down=down, right=right, left=left, enter=enter)
         if ch in ('\r', '\n'):
-            print()
-            return snapped_angle
-        elif ch.lower() == 'w':
+            return snap_to_nearest_angle(angle, available_angles)
+        elif ch == 'w':
             angle += 10
-        elif ch.lower() == 's':
+        elif ch == 's':
             angle -= 10
-        elif ch.lower() == 'd':
+        elif ch == 'd':
             angle += 1
-        elif ch.lower() == 'a':
+        elif ch == 'a':
             angle -= 1
-        elif ch.lower() == 'p':
-            hrtf_file = HRTF_PATH / f"Subject_{subject}_{int(snapped_angle)}_0.mat"
+        elif ch == 'p':
+            hrtf_file = HRTF_PATH / f"Subject_{subject}_{int(snap_to_nearest_angle(angle, available_angles))}_0.mat"
             try:
                 data = loadmat(str(hrtf_file))
                 if 'hrir_left' not in data or 'hrir_right' not in data:
@@ -255,27 +289,27 @@ def get_angle_input(current_angle: float, available_angles: list, subject: str, 
                     signal.lfilter(data['hrir_left'].flatten(), 1, stimulus),
                     signal.lfilter(data['hrir_right'].flatten(), 1, stimulus)
                 ])
-                if play_audio(spatial_audio, FS):
-                    print("Played preview sound...")
-                else:
-                    print("Failed to play preview sound.")
+                play_audio(spatial_audio, FS)
             except Exception as e:
-                print(f"Preview Error for file {hrtf_file.name}: {str(e)}")
-        elif ch.isdigit() or ch in ('-', '.'):
-            sys.stdout.write(ch)
-            sys.stdout.flush()
-            user_input = input()
-            try:
-                angle = float(ch + user_input)
-            except ValueError:
-                print("Invalid numeric input, please try again.")
-        else:
-            print(f"\nUnrecognized key: '{ch}'. Use WASD, p, or Enter.")
+                img = Image.new("RGB", (WIDTH, HEIGHT), "WHITE")
+                draw = ImageDraw.Draw(img)
+                draw.text((10, 10), f"Preview error: {str(e)}", font=font, fill="RED")
+                img = img.rotate(90, expand=True)
+                lcd.ShowImage(img)
+                time.sleep(2)
 
-def edit_profile(up=None, down=None, left=None, right=None, enter=None):
+
+def edit_profile(up=None, down=None, left=None, right=None, enter=None, lcd=None):
     """Main profile editing workflow."""
-    print("=== Edit HRTF Profile Stem Directions ===")
-    profile_path, profile_data = select_profile(PROFILES_DIR, up=up, down=down, right=right, left=left, enter=enter)
+    img = Image.new("RGB", (SCREEN_HEIGHT, SCREEN_WIDTH), "WHITE")
+    draw = ImageDraw.Draw(img)
+    msg = "=== Edit HRTF Profile Stem Directions ==="
+    print(msg)
+    draw.text((SCREEN_HEIGHT/2, 5), msg, font=font_menu, fill="BLACK")
+    lcd.ShowImage(img)
+    time.sleep(1)
+    lcd.clear()
+    profile_path, profile_data = select_profile(PROFILES_DIR, up=up, down=down, right=right, left=left, enter=enter, lcd=lcd)
     
     # Initialize stem_directions if not present
     if "stem_directions" not in profile_data:
@@ -289,9 +323,9 @@ def edit_profile(up=None, down=None, left=None, right=None, enter=None):
         available_angles = list(range(-180, 181))  # Fallback to all integers
     
     while True:
-        stem = select_stem(up=up, down=down, right=right, left=left, enter=enter)
+        stem = select_stem(up=up, down=down, right=right, left=left, enter=enter, lcd=lcd)
         current_angle = profile_data["stem_directions"].get(stem, 0)
-        new_angle = get_angle_input(current_angle, available_angles, subject, up=up, down=down, right=right, left=left, enter=enter)
+        new_angle = get_angle_input(current_angle, available_angles, subject, up=up, down=down, right=right, left=left, enter=enter, lcd=lcd)
         profile_data["stem_directions"][stem] = new_angle
         
         print("\nCurrent stem directions:")

@@ -11,7 +11,7 @@ from gpiozero.exc import GPIOZeroError
 import threading
 import stt
 from calibrateUserProfile import run_calibration
-from utility import run_spatial_audio, apply_bulk_hrtf, summed_signal
+from utility import run_spatial_audio, apply_bulk_hrtf, summed_signal_from_file, summed_signal
 from datetime import datetime
 from menu_app_modular.battery_monitor import get_battery_info
 import soundfile as sf
@@ -45,7 +45,7 @@ except GPIOZeroError:
 
 # Global Variables
 menu_stack = ["main"]
-GLOBAL_VOLUME = 0 
+GLOBAL_VOLUME = 50 
 current_index = 0
 up_pressed = down_pressed = select_pressed = back_pressed = False
 vol_up_pressed = vol_down_pressed = False
@@ -162,26 +162,28 @@ def play_selected_song():
 
 
 def play_spatial_song():
-    print("Check if pickle file exists")
+    global selected_song
+    print("Check if Spatial file exists")
     stems_directory = f"Spatial/{selected_song}"
     if selected_song and os.path.exists(stems_directory):
         print("Loaded Profile: ", Loaded_Profile)
-        spatial_stems = apply_bulk_hrtf(stems_directory, Loaded_Profile=Loaded_Profile)
+        apply_bulk_hrtf(stems_directory, Loaded_Profile=Loaded_Profile)
         print("Generate summed song")
-        final_output = summed_signal(spatial_stems['vocals'], spatial_stems['bass'], spatial_stems['other'], spatial_stems['drums'])
+        final_output = summed_signal_from_file(stems_directory)
         print("Write Stems to flac")
-        sf.write('Spatial/output.flac', final_output, 44100)
-        print("Play stems with ffmpeg")
-        subprocess.run(f'ffplay -nodisp -autoexit "Spatial/output.flac"', shell=True)
-        try:
-            os.remove('Spatial/output.flac')   
-            print("File removed.")
-        except FileNotFoundError:
-            print("File not found.")
-        except PermissionError:
-            print("No permission to delete the file.")
-    else:
-        return "File not found"
+        sf.write('Music/output.flac', final_output, 44100)
+        print("Play stems with music player")
+        # subprocess.run(f'ffplay -nodisp -autoexit "Spatial/output.flac"', shell=True)
+        stt.play_button("output.flac")
+    #     try:
+    #         os.remove('Music/output.flac')   
+    #         print("File removed.")
+    #     except FileNotFoundError:
+    #         print("File not found.")
+    #     except PermissionError:
+    #         print("No permission to delete the file.")
+    # else:
+    #     return "File not found"
 
 def play_spatial_song_old():
     print("Check if pickle file exists")
@@ -352,7 +354,8 @@ def run_calibration_wrapper():
             down=DOWN_BUTTON,
             left=LEFT_BUTTON,
             right=RIGHT_BUTTON,
-            enter=SELECT_BUTTON
+            enter=SELECT_BUTTON,
+            lcd = LCD
         )
     except Exception as e:
         output = f"Calibration error: {str(e)}"
@@ -366,7 +369,8 @@ def run_edit_profiles_wrapper():
             down=DOWN_BUTTON,
             left=LEFT_BUTTON,
             right=RIGHT_BUTTON,
-            enter=SELECT_BUTTON
+            enter=SELECT_BUTTON,
+            lcd=LCD
         )
     except Exception as e:
         output = f"Calibration error: {str(e)}"
@@ -391,7 +395,6 @@ def update_display(img):
     try:
         LCD.ShowImage(img)
         time.sleep(0.01)
-        print("Updated display")
     except Exception as e:
         print("Failed to update display: %s", e)
 
@@ -478,6 +481,7 @@ def handle_selection(selected_option, h, w, current_menu_key):
                     output = func()
                 except Exception as e:
                     output = f"Python Error: {e}"
+                    
             else:
                 output = f"Function '{action}' not found"
         else:
@@ -488,13 +492,17 @@ def handle_selection(selected_option, h, w, current_menu_key):
         lines = str(output).split("\n")
         img = Image.new("RGB", (SCREEN_HEIGHT, SCREEN_WIDTH), "WHITE")
         draw = ImageDraw.Draw(img)
+        #x = SCREEN_WIDTH * 0.5 - len(label)/2
+        #y = (SCREEN_HEIGHT/4 + len(options)/2) + (idx * 17)
         LCD.clear()
         for i, line in enumerate(lines):
-            y = max(0, min(h - 1, h // 2 - len(lines) // 2 + i))
-            x = max(0, min(w - 1, w // 2 - len(line) // 2))
+            y = max(0, min(h - 1, h // 4 - len(lines) // 2 + (i*17)))
+            x = max(0, min(w - 1, w // 4 - len(line) // 2))
             #stdscr.addstr(y, x, line[:w - x])
-            draw.text((SCREEN_HEIGHT, SCREEN_WIDTH), line[:w - x])
+            draw.text((x, y), line[:w - x], font=font_menu, fill="BLACK")
+        img = img.rotate(90, expand=True)
         update_display(img)
+        print(output)
         time.sleep(5)
     else: # Target has no action attached
         LCD.clear()
@@ -502,8 +510,11 @@ def handle_selection(selected_option, h, w, current_menu_key):
         y = max(0, min(h - 1, h // 2))
         x = max(0, min(w - 1, w // 2 - len(message) // 2))
         #stdscr.addstr(y, x, message[:w - x])
-        draw.text((SCREEN_HEIGHT, SCREEN_WIDTH), line[:w - x])
+        draw.text((x, y), line[:w - x], font=font_menu, fill="BLACK")
+        img = img.rotate(90, expand=True)
+        update_display(img)
         time.sleep(1)
+
 
 
 def draw_menu():
@@ -529,10 +540,17 @@ def draw_menu():
         battery = get_battery_info()
         # stdscr.addstr(1, w - len(battery) - 1, str(int(battery[1])) + "%") # Battery percentage
         # stdscr.addstr(2, w - len(str(GLOBAL_VOLUME)) - 1, str(GLOBAL_VOLUME) + "%") # Volume Battery percentage
+        # baticon = Image.open(r"SeniorDesignCode/github_code/SeniorDesign/assets/music_player/battery.png")
+        # draw.image(baticon)
         draw.text((SCREEN_WIDTH-len(str(int(battery[1]))), 22), str(int(battery[1])) + "%", font=font_menu, fill="BLACK")
         # volume 
         draw.text((SCREEN_WIDTH-len(str(GLOBAL_VOLUME))-1, 39), str(GLOBAL_VOLUME) + "%", font=font_menu, fill="BLACK")
         
+
+        time_left = stt.get_remaining_time()
+        if time_left == None:
+            time_left = "No Song Playing"
+        draw.text((SCREEN_WIDTH/2-len(time_left)/2, 240-17), time_left, font=font_menu, fill="BLACK")
 
         # Menu variables
         current_menu_key = menu_stack[-1] # Get current menu
@@ -630,6 +648,7 @@ def volume_button_wrapper(increment, GLOBAL_VOLUME):
 def main():
     try:
         global LCD
+        volume_button_wrapper(0,GLOBAL_VOLUME)
         LCD = LCD_2inch4()
         LCD.Init()
         LCD.clear()

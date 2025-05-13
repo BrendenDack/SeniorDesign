@@ -13,6 +13,8 @@ import h5py
 import json
 from pathlib import Path
 import h5py
+import gc
+import soundfile as sf
 
 PROFILES_DIR = Path("user_profiles")
 global volume
@@ -95,28 +97,29 @@ def separate_sources(file_name):
         audio = audio.set_channels(2)
 
     # Convert to 44100Hz and 16-bit samples
-    audio = audio.set_frame_rate(16000).set_sample_width(2)
+    audio = audio.set_frame_rate(44100).set_sample_width(2)
 
     # Get raw data as NumPy array
     samples = np.array(audio.get_array_of_samples()).reshape((-1, 2))
-    samples = samples.astype(np.float32) / 32768.0  # normalize 16-bit PCM
+    samples = samples.astype(np.int16) / 32768.0  # normalize 16-bit PCM
 
     # Separate sources
     estimates = predict.separate(
-        torch.as_tensor(samples).float(),
-        rate=16000,
+        torch.as_tensor(samples).float().T,
+        rate=44100,
         device=device
     )
 
     for target, estimate in estimates.items():
         print(target)
         audio_out = estimate.detach().cpu().numpy()[0]
-        display(Audio(audio_out, rate=16000))
+        display(Audio(audio_out, rate=44100))
 
     # Convert to dictionary of NumPy arrays
     estimates_numpy = {}
     for target, estimate in estimates.items():
         estimates_numpy[target] = torch.squeeze(estimate).detach().cpu().numpy().T
+        sf.write(f"Spatial/{target}_output.wav", estimates_numpy[target], samplerate=44100)
 
     return estimates_numpy
 
@@ -258,7 +261,7 @@ def save_stems_to_pkl_v1(estimates_numpy, song_name, metadata_file="Spatial/meta
         "other": np.random.rand(44100, 2)    # Stereo other sounds
     }
 
-    save_stems_to_pkl(estimates_numpy, "example_song")
+    save_stems_to_pkl_v2(estimates_numpy, "example_song")
 
 
 def save_stems_to_pkl_v2(estimates_numpy, song_name):
@@ -373,7 +376,7 @@ def run_spatial_audio_new(file_name):
         estimates_numpy = separate_sources(file_name)  # Extract stems
 
         print("🔄 Saving stems with metadata indexing...")
-        save_stems_to_pkl(estimates_numpy, name_only, metadata_file, data_file)
+        save_stems_to_pkl_v2(estimates_numpy, name_only, metadata_file, data_file)
 
     return f"🎵 Song '{name_only}' successfully converted."
 
@@ -440,20 +443,40 @@ def apply_bulk_hrtf(stems_directory, Loaded_Profile):
     print("Apply HRTFs")
     angles = profile_data["stem_directions"]
     test_subject = profile_data['hrtf_subject']
-    print("Create Stems dict")
-    spacial_stems = {'vocals' : 0, 'drums' : 0, 'bass' : 0, 'other' : 0}
 
-
-    with h5py.File(stems_directory, "r") as f:
+    import psutil
+    with h5py.File(stems_directory, "r") as f_in, h5py.File(stems_directory + ".tmp", "w") as f_out:
         for stem_name in ["vocals", "drums", "bass", "other"]:
             print(f"Processing {stem_name}")
-            stem = f[stem_name][:]
+            print(f"Memory used: {psutil.Process().memory_info().rss / 1e6:.2f} MB")
+            stem = f_in[stem_name][:]  # Load to RAM
+            
+            print(f"Memory used: {psutil.Process().memory_info().rss / 1e6:.2f} MB")
             angle = angles[stem_name]
+            stem = Stereo_to_mono(stem)
             processed = apply_hrtf(stem, angle, test_subject)
-            spacial_stems[stem_name] = processed
-            del stem
-
+            sf.write(f"Spatial/hrtf_{stem_name}_output.wav", processed, samplerate=44100)
+            print(f"Memory used: {psutil.Process().memory_info().rss / 1e6:.2f} MB")
+            
+            f_out.create_dataset(f"hrtf_{stem_name}", data=processed, compression="gzip")
+            
+            # Free memory
+            del stem, processed
+            gc.collect()
 
     print("Finished HRTFS")
+
+
+
+def summed_signal_from_file(stems_directory):
     
-    return spacial_stems
+    summed_song = 0
+    with h5py.File(stems_directory + ".tmp", 'r') as f:
+        for stem_name in ["hrtf_vocals", "hrtf_drums", "hrtf_bass", "hrtf_other"]:
+            #spacial_stems[stem_name] = f[stem_name][:]
+            summed_song += f[stem_name][:]
+
+    summed_song /= 4
+
+    #summed_song = (spacial_stems["hrtf_vocals"] + spacial_stems["hrtf_drums"] + spacial_stems["hrtf_bass"] + spacial_stems["hrtf_other"])/4
+    return summed_song

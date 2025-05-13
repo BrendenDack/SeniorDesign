@@ -17,7 +17,7 @@ CHUNK = 8000  # 512 #8000 original chunk size
 WIDTH = 2
 
 # Path for music folder (REPLACE WITH YOUR PATH BRENDEN, ensure you use / not \)
-MUSIC_FOLDER = '/home/Sara/RPI-Sara/code/Music'
+MUSIC_FOLDER = '/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/Music'
 
 # Initialize Vosk model
 model = Model('vosk-model-small-en-us-0.15')
@@ -151,13 +151,13 @@ def play_buttons(): #this is for playing general playlist
     player.play()
 
 def play_button(selected_song): 
-    global playlist, current_index,last_played_index,instance,player
+    global playlist, current_index, last_played_index, instance, player
     playlist[:] = song_files
     
     # Find full path of the selected song and plays it
     for i, path in enumerate(playlist):
         if selected_song.lower() in os.path.basename(path).lower():
-            last_played_index = current_index  # tracck the last played song before switching
+            last_played_index = current_index  # track the last played song before switching
             current_index = i
             media = instance.media_new(path)
             player.set_media(media)
@@ -279,6 +279,23 @@ def update_volume(increment ,GLOBAL_VOLUME):
     player.audio_set_volume(GLOBAL_VOLUME + increment)
     
     return GLOBAL_VOLUME    
+
+def get_remaining_time():
+
+    if player.get_length() == -1:
+        return
+
+    # Get total duration (in ms)
+    duration = player.get_length()
+
+    # Get current time (in ms)
+    current_time = player.get_time()
+
+    # Time left (in ms)
+    time_left = duration - current_time
+
+    # Convert to seconds or display nicely
+    return "Time left: {:.2f} seconds".format(time_left / 1000)
 
 def start_voice_recognition():
     global player, playlist
