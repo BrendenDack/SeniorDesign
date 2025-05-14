@@ -380,15 +380,15 @@ def play_button_wrapper():
     stt.play_button(selected_song)
 
 # Utility functions for screen
-def paste_image(img, filename, pos, resize=None):
-    try:
-        im = Image.open(ASSETS_PATH / filename).convert("RGBA")
-        if resize:
-            im = im.resize(resize)
-        img.paste(im, pos, im)
-        print(f"Pasted image: {filename}")
-    except Exception as e:
-        print(f"Could not load {filename}: %s", e)
+# def paste_image(img, filename, pos, resize=None):
+#     try:
+#         im = Image.open(ASSETS_PATH / filename).convert("RGBA")
+#         if resize:
+#             im = im.resize(resize)
+#         img.paste(im, pos, im)
+#         print(f"Pasted image: {filename}")
+#     except Exception as e:
+#         print(f"Could not load {filename}: %s", e)
 
 def update_display(img):
     global LCD
@@ -403,7 +403,7 @@ function_dictionary = {
     # Default setup for function dictionary. Just add your name and function to use it in the submenus
     "default_function" : clear_console, 
     "start_voice" : start_voice,
-    "play_song" : stt.play_button,
+    "play_song" : stt.play_buttons,
     "play_single_song" : play_button_wrapper,
     "run_calibration" : run_calibration_wrapper,
     "apply_spatial_audio" : run_spatial_audio_helper,
@@ -489,7 +489,21 @@ def handle_selection(selected_option, h, w, current_menu_key):
 
         if output == None:
             output = "Finished Task"
-        lines = str(output).split("\n")
+            
+        
+        # Ensure text is properly split for display
+        if output.startswith("Success! Profile saved as"):
+            static_text = "Success! Profile saved as"  # Keep full first line
+            user_id_text = output.replace(static_text, "").strip()  # Isolate the user ID
+
+            # Store in separate lines for display processing
+            lines = [static_text, user_id_text]  # Ensure proper two-line display
+        else: 
+            lines = str(output).split("\n")    
+            
+            
+                
+        
         img = Image.new("RGB", (SCREEN_HEIGHT, SCREEN_WIDTH), "WHITE")
         draw = ImageDraw.Draw(img)
         #x = SCREEN_WIDTH * 0.5 - len(label)/2
@@ -516,12 +530,22 @@ def handle_selection(selected_option, h, w, current_menu_key):
         time.sleep(1)
 
 
+def paste_image(filename, pos, resize=None):
+    try:
+        im = Image.open(filename).convert("RGBA")
+        # if crop:
+        #     im = im.crop(crop)
+        if resize:
+            im = im.resize(resize)
+        img.paste(im, pos, im)
+    except Exception as e:
+        print(f"[WARN] Could not load {filename}: {e}")
 
 def draw_menu():
     # Global variables
     global current_index, up_pressed, down_pressed, select_pressed, back_pressed, vol_down_pressed, vol_up_pressed, GLOBAL_VOLUME
     global LCD
-    
+    global img
 
     while True:
         # Clear screen and double check height and width. This allows for real-time resizing
@@ -532,7 +556,7 @@ def draw_menu():
         # --- Time Display ---
         now = datetime.now()
         time_str = now.strftime("%I:%M:%S %p")  # e.g., 04:15:22 PM
-        draw.text((SCREEN_WIDTH-len(time_str)-12, 5), time_str, font=font_menu, fill="BLACK")
+        draw.text((SCREEN_WIDTH-len(time_str)-12, 220), time_str, font=font_menu, fill="BLACK")
         # stdscr.addstr(0, w - len(time_str) - 1, time_str)
         
         # Battery stuff but I don't have the PSU so I'll touch it later 
@@ -540,18 +564,13 @@ def draw_menu():
         battery = get_battery_info()
         # stdscr.addstr(1, w - len(battery) - 1, str(int(battery[1])) + "%") # Battery percentage
         # stdscr.addstr(2, w - len(str(GLOBAL_VOLUME)) - 1, str(GLOBAL_VOLUME) + "%") # Volume Battery percentage
-        # baticon = Image.open(r"SeniorDesignCode/github_code/SeniorDesign/assets/music_player/battery.png")
-        # draw.image(baticon)
-        draw.text((SCREEN_WIDTH-len(str(int(battery[1]))), 22), str(int(battery[1])) + "%", font=font_menu, fill="BLACK")
+        paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/music_player/battery.png", (140, 221), resize=(15, 15))
+        draw.text((SCREEN_WIDTH-len(str(int(battery[1])))-80, 220), str(int(battery[1])) + "%", font=font_menu, fill="BLACK")
+
         # volume 
-        draw.text((SCREEN_WIDTH-len(str(GLOBAL_VOLUME))-1, 39), str(GLOBAL_VOLUME) + "%", font=font_menu, fill="BLACK")
+        draw.text((5, 220), "Volume", font=font_menu, fill="BLACK")
+        draw.text((SCREEN_WIDTH-len(str(GLOBAL_VOLUME))-170, 220), str(GLOBAL_VOLUME) + "%", font=font_menu, fill="BLACK")
         
-
-        time_left = stt.get_remaining_time()
-        if time_left == None:
-            time_left = "No Song Playing"
-        draw.text((SCREEN_WIDTH/2-len(time_left)/2, 240-17), time_left, font=font_menu, fill="BLACK")
-
         # Menu variables
         current_menu_key = menu_stack[-1] # Get current menu
         current_menu = menus[current_menu_key] # ^^^
@@ -565,16 +584,52 @@ def draw_menu():
         # Iterate through all options and print their labels to the middle of the screen
         for idx, option in enumerate(options):
             label = option["label"]
-            x = SCREEN_WIDTH * 0.5 - len(label)/2
-            y = (SCREEN_HEIGHT/4 + len(options)/2) + (idx * 17)
+            x = len(option) + 15
+            y = (SCREEN_HEIGHT/6 + len(option)/2) + (idx * 17)
             if idx == current_index: # Decides which option is selected and colors it
                 #stdscr.attron(curses.color_pair(1))
                 #stdscr.addstr(y, x, label) # Write colored option to the screen
                 #stdscr.attroff(curses.color_pair(1))
-                draw.text((x,y), label, font=font_menu, fill="RED")
+                if current_menu_key == "submenu_Music_Player":
+                    draw.text((x + 15,y), "<", font=font_menu, fill="BLACK")
+                else:
+                    draw.text((x,y), label, font=font_menu, fill="RED")
+
             else:
+                if current_menu_key == "submenu_Music_Player":
+                    paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/music_player/image_3.png", (x, 57), resize=(15, 15))
+                    paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/music_player/play.png", (x, 74), resize=(15, 15))
+                    paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/music_player/skip.png", (x, 91), resize=(15, 15))
+                    paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/music_player/reverse.png", (x, 108), resize=(15, 15))
+                    paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/music_player/loop.png", (x, 125), resize=(15, 15))
+                    paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/music_player/shuffle.png", (x, 142), resize=(15, 15))
+                    paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/music_player/backs.png", (x, 159), resize=(15, 15))                    
+                else:
                 #stdscr.addstr(y, x, label) # write non-colored options to screen
-                draw.text((x,y), label, font=font_menu, fill="BLACK")
+                    draw.text((x,y), label, font=font_menu, fill="BLACK")
+
+            if current_menu_key == "submenu_songs":
+                paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/library/note.png", (1, 57), resize=(15, 15))
+                paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/library/note.png", (1, 74), resize=(15, 15))
+                paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/library/note.png", (1, 91), resize=(15, 15))
+                paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/library/note.png", (1, 108), resize=(15, 15))
+                paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/library/note.png", (1, 125), resize=(15, 15))
+            elif current_menu_key == "main":
+                paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/library/note.png", (1, 57), resize=(15, 15))
+                paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/main_menu/setting.png", (1, 74), resize=(15, 15))
+                paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/main_menu/play.png", (1, 91), resize=(15, 15))
+
+        if current_menu_key == "submenu_Music_Player":
+            time_left = stt.get_remaining_time()
+            if time_left == None:
+                time_left = "No Song Playing"
+            current = stt.song_current()
+            if current == None:
+                current = "No Song Playing"
+            draw.text((SCREEN_WIDTH/2 - len(label), 100), current, font=font_menu, fill="BLACK")
+            draw.text((SCREEN_WIDTH/2 - len(time_left)/3 -10, 115), time_left, font=font_menu, fill="BLACK")
+
+
 
         #stdscr.refresh() # Refresh to push changes to screen
         img = img.rotate(90, expand=True)
@@ -632,7 +687,7 @@ def draw_menu():
        
         # Sleep so the screen doesn't freak out from too fast refreshing
         # img = img.rotate(270, expand=True)
-        time.sleep(0.5)
+        time.sleep(0.235)
 
  
    
@@ -647,11 +702,20 @@ def volume_button_wrapper(increment, GLOBAL_VOLUME):
 
 def main():
     try:
-        global LCD
+        global LCD, img, GLOBAL_VOLUME
         volume_button_wrapper(0,GLOBAL_VOLUME)
         LCD = LCD_2inch4()
         LCD.Init()
         LCD.clear()
+        # Create an image at the start so it persists across function execution
+        img = Image.new("RGB", (320, 240), "WHITE")
+        paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/boot.png", (0,0), resize=(320, 240))
+        # Display boot image before proceeding
+        img = img.rotate(90, expand=True)
+        LCD.ShowImage(img)  
+        time.sleep(4)  # Give time for boot screen to be visible
+        LCD.clear()
+        del img
         draw_menu()
         #curses.wrapper(draw_menu) # draw_menu contains the main loop for this file
     except KeyboardInterrupt:

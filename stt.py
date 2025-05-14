@@ -297,6 +297,17 @@ def get_remaining_time():
     # Convert to seconds or display nicely
     return "Time left: {:.2f} seconds".format(time_left / 1000)
 
+def song_current():
+    # Get the media object
+    media = player.get_media()
+    if media == None:
+        return None
+    else:
+        media.parse()  # Parses the metadata
+        # Get the title
+        title = media.get_meta(vlc.Meta.Title)
+        return title
+
 def start_voice_recognition():
     global player, playlist
     # Initialize PyAudio

@@ -13,6 +13,8 @@ import random
 import termios
 import tty
 
+from PIL import Image, ImageDraw, ImageFont
+
 # Configuration
 DURATION = 1.5
 HRTF_PATH = Path("HRIRs/")
@@ -20,6 +22,9 @@ PROFILES_DIR = Path("user_profiles")
 FS = 48000  # Force modern sample rate
 SUPPRESS_ERRORS = True  # Set to False to debug audio errors
 NORMALIZED_ANGLES = [-180, -90, 0, 90]  # Base angles for snapping
+
+font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18)
+font_menu = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
 
 def get_available_angles(hrtf_path: Path, subject: str) -> list:
     """Load available angles for a subject from HRIR files."""
@@ -133,29 +138,70 @@ def get_input(up=None, down=None, left=None, right=None, enter=None) -> str:
         return '\n'
     return ''
 
-def get_angle_input(current_angle: float, preset_angle: float, stimulus: np.ndarray, spatial_audio: np.ndarray, fs: int, up=None, down=None, left=None, right=None, enter=None) -> float:
+def get_angle_input(current_angle: float, preset_angle: float, stimulus: np.ndarray, spatial_audio: np.ndarray, fs: int, up=None, down=None, left=None, right=None, enter=None, lcd=None) -> float:
+    # Refactor in Pillow for display
+    global font_large, font_menu
+    
+    #lcd.clear()
+    
+    # Create a persistent image for the function execution
+   
+    y_offset = 17
+    
     """
     Interactively adjust the perceived angle with deviation feedback.
-    Use:
-      • w/up: +10°
-      • s/down: -10°
-      • d/right: +1°
-      • a/left: -1°
-      • r: Replay sound (for rear angles)
-    Press enter button to confirm the current angle.
     """
     print("\nAdjust the perceived angle (WASD/buttons for adjustments, r to replay):")
+    #replay needs to be maped to back button to include feature. for simplicity it has been removed
     print("  w/up: +10°, s/down: -10°, d/right: +1°, a/left: -1°, r: replay")
     print("Press enter button to confirm the current angle.")
+    
     angle = current_angle
+    
     while True:
+        
+        # Create an image at the start so it persists across function execution
+        img = Image.new("RGB", (320, 240), "WHITE")
+        draw = ImageDraw.Draw(img)
+        
+        # !!!
+        # Draw static UI elements 
+        play_msg = "Playing test sound..."
+        print(play_msg)
+        play_x = (320 - draw.textlength(play_msg, font=font_menu)) // 2
+        draw.text((play_x, 40), play_msg, font=font_menu, fill="BLACK")
+
+        AnglePrompt1 = "Adjust the perceived angle "
+        AP1_x = (320 - draw.textlength(AnglePrompt1, font=font_menu)) // 2
+        draw.text((AP1_x, 40+y_offset), AnglePrompt1, font=font_menu, fill="BLACK")
+
+        AnglePrompt2 = "  up/down: 10°, right/left: 1°"
+        AP2_x = (320 - draw.textlength(AnglePrompt2, font=font_menu)) // 2
+        draw.text((AP2_x, 40+2*y_offset), AnglePrompt2, font=font_menu, fill="BLACK")
+
+        AnglePrompt3 = "enter to confirm angle."
+        AP3_x = (320 - draw.textlength(AnglePrompt3, font=font_menu)) // 2
+        draw.text((AP3_x, 40+3*y_offset), AnglePrompt3, font=font_menu, fill="BLACK")
+        
         deviation = abs(angle - preset_angle)
         sys.stdout.write("\r\033[K")
         sys.stdout.flush()
-        print(f"Current angle: {angle:.1f}° (Deviation: {deviation:.1f}°)", end="", flush=True)
+        
+        # Clear only the previous angle display before updating new values
+        #draw.rectangle([(0, 160), (320, 220)], fill="WHITE")  # Erases previous angle text
+
+        # Draw the updated angle information
+        
+        #AnglePrompt4 = f"Current angle: {angle:.1f}° (Deviation: {deviation:.1f}°)"
+        AnglePrompt4 = f"Current angle: {angle:.1f}° "
+        AP4_x = (320 - draw.textlength(AnglePrompt4, font=font_menu)) // 2  
+        draw.text((AP4_x, 172+y_offset), AnglePrompt4, font=font_menu, fill="BLACK")
+
+        img = img.rotate(90, expand=True)
+        lcd.ShowImage(img)  # Refresh LCD with updated angle
+
         ch = get_input(up, down, left, right, enter)
         if not ch:
-            time.sleep(0.2)  # Prevent flooding
             continue
         if ch == '\n':
             print()
@@ -173,23 +219,61 @@ def get_angle_input(current_angle: float, preset_angle: float, stimulus: np.ndar
             print("Replayed test sound...")
         else:
             print(f"\nUnrecognized input: '{ch}'. Use WASD/buttons or r.")
+            
+            # Clear previous error message before displaying a new one
+            #draw.rectangle([(0, 105), (320, 125)], fill="WHITE")
 
-def calibration_routine(hrtf_subjects: list, normalized_angles: list, num_trials: int = 4, up=None, down=None, left=None, right=None, enter=None) -> dict:
+            error_msg = f"Unrecognized input: '{ch}'. Use WASD/buttons or r."
+            err_x = (320 - draw.textlength(error_msg, font=font_menu)) // 2  
+            draw.text((err_x, 172+2*y_offset), error_msg, font=font_menu, fill="BLACK")
+
+            lcd.ShowImage(img)
+
+def calibration_routine(hrtf_subjects: list, normalized_angles: list, num_trials: int = 4, up=None, down=None, left=None, right=None, enter=None, lcd=None) -> dict:
+    global font_menu, font_large
+
     """
     Calibration routine for multiple HRTF subjects.
     Randomly selects 4 angles per subject, snapped to available HRIR angles, prioritizing negative angles.
     """
+    
+    # Create an image at the start so it persists across function execution
+    img = Image.new("RGB", (320, 240), "WHITE")
+    draw = ImageDraw.Draw(img)
+    
+
+    # Ensure the first UI element is drawn before showing the image (avoid blank screen)
+    draw.text((10, 10), "Starting Calibration...", font=font_menu, fill="BLACK")
+    
+
+    img = img.rotate(90, expand=True)
+    lcd.ShowImage(img)  # Show initial display
+    time.sleep(1)
+    lcd.clear()
+
     calibration_data = {subject: {'preset_angles': [], 'responses': []} for subject in hrtf_subjects}
+    
     for subject in hrtf_subjects:
-        print(f"\nCalibrating for Subject_{subject}...")
+        img = Image.new("RGB", (320, 240), "WHITE")
+        draw = ImageDraw.Draw(img)
+
         available_angles = get_available_angles(HRTF_PATH, subject)
         if not available_angles:
-            print(f"No HRIR files found for Subject_{subject} in {HRTF_PATH}")
-            continue
+            error_msg = f"No HRIR files found for Subject_{subject} in {HRTF_PATH}"
+            print(error_msg)
 
+            #draw.rectangle([(0, 40), (320, 70)], fill="WHITE")  # Clears error area before updating
+            error_x = (320 - draw.textlength(error_msg, font=font_menu)) // 2
+            draw.text((error_x, 50), error_msg, font=font_menu, fill="BLACK")
+
+            lcd.ShowImage(img)  # Ensure error appears before skipping this subject
+            time.sleep(1)
+            continue
+        
+        print("snap to normalize")
         # Snap normalized angles to available angles
         snapped_angles = [snap_to_nearest_angle(angle, available_angles) for angle in normalized_angles]
-        # Ensure at least 2 negative angles
+
         negative_angles = [a for a in snapped_angles if a < 0]
         positive_angles = [a for a in snapped_angles if a >= 0]
         if len(negative_angles) < 2:
@@ -202,10 +286,30 @@ def calibration_routine(hrtf_subjects: list, normalized_angles: list, num_trials
         # Select 4 random angles
         trial_angles = negative_angles + random.choices(negative_angles + positive_angles, k=num_trials - len(negative_angles))
         random.shuffle(trial_angles)
-
+        
+        print("generate_swept_sine")
         stimulus = generate_swept_sine(DURATION, FS)
+        
         for trial, preset_angle in enumerate(trial_angles):
-            print(f"\nTrial {trial + 1} for Subject_{subject}: Preset angle = {preset_angle}°")
+            img = Image.new("RGB", (320, 240), "WHITE")
+            draw = ImageDraw.Draw(img)
+            
+            msg = f"Calibrating for Subject_{subject}..."
+            print(msg)
+            msg_x = (320 - draw.textlength(msg, font=font_menu)) // 2  # Proper text centering
+            draw.text((msg_x, 10), msg, font=font_menu, fill="BLACK")
+            
+            trial_msg = f"Trial {trial + 1} for Subject_{subject}"
+            print(trial_msg)
+            trial_x = (320 - draw.textlength(trial_msg, font=font_menu)) // 2
+            
+            trial_msg2 = f"Preset angle = {preset_angle}°"
+            print(trial_msg2)
+            trial_x2 = (320 - draw.textlength(trial_msg2, font=font_menu)) // 2
+  
+            draw.text((trial_x, 80), trial_msg, font=font_menu, fill="BLACK")
+            draw.text((trial_x2, 80+17), trial_msg2, font=font_menu, fill="BLACK")
+
             hrtf_file = HRTF_PATH / f"Subject_{subject}_{int(preset_angle)}_0.mat"
             try:
                 data = loadmat(str(hrtf_file))
@@ -216,14 +320,34 @@ def calibration_routine(hrtf_subjects: list, normalized_angles: list, num_trials
                     signal.lfilter(data['hrir_right'].flatten(), 1, stimulus)
                 ])
             except Exception as e:
-                print(f"HRTF Processing Error for file {hrtf_file.name}: {str(e)}")
+                error_msg = f"HRTF Processing Error for file {hrtf_file.name}: {str(e)}"
+                print(error_msg)
+
+                error_x = (320 - draw.textlength(error_msg, font=font_menu)) // 2
+                draw.text((error_x, 100), error_msg, font=font_menu, fill="BLACK")
+
                 continue
+            
+            print("play_audio")
             if play_audio(spatial_audio, FS):
-                print("Playing test sound...")
-                response = get_angle_input(preset_angle, preset_angle, stimulus, spatial_audio, FS, up, down, left, right, enter)
+                #play_msg = "Playing test sound..."
+                #print(play_msg)
+                #play_x = (320 - draw.textlength(play_msg, font=font_menu)) // 2
+                #draw.text((play_x, 120), play_msg, font=font_menu, fill="BLACK")
+
+                img = img.rotate(90, expand=True)
+                lcd.ShowImage(img)
+                # lcd.ShowImage(img)
+                time.sleep(2.5)
+
+                response = get_angle_input(preset_angle, preset_angle, stimulus, spatial_audio, FS, up, down, left, right, enter, lcd=lcd)
                 time.sleep(0.1)
+
                 calibration_data[subject]['preset_angles'].append(preset_angle)
                 calibration_data[subject]['responses'].append(response)
+
+    lcd.ShowImage(img)  # Final image update after calibration steps
+    time.sleep(1)
     return calibration_data
 
 def estimate_head_params(calibration_data: dict) -> tuple[dict, str]:
@@ -263,68 +387,6 @@ def estimate_head_params(calibration_data: dict) -> tuple[dict, str]:
 
     return selected_params, selected_subject
 
-
-# def select_profile(up=None, down=None, enter=None) -> str:
-#     #os.system('cls' if os.name == 'nt' else 'clear')
-
-#     """Select a profile using up/down buttons, confirm with enter."""
-#     profile_files = sorted([f for f in PROFILES_DIR.glob("*.json") if f.is_file()])
-    
-#     if not profile_files:
-#         print("No profiles found in user_profiles/")
-#         return None
-#     if len(profile_files) > 5:
-#         profile_files = profile_files[:5]
-
-#     selected_idx = 0
-#     has_navigated = False
-#     print("Select a profile (up/w, down/s, enter to confirm):")
-#     for i, profile in enumerate(profile_files):
-#         cursor = "> " if i == selected_idx else "  "
-#         print(f"{cursor}{i + 1}) {profile.stem}")
-#     sys.stdout.flush()
-
-#     num_lines = len(profile_files) + 1
-#     while True:
-
-#         ch = get_input(up, down, None, None, enter)
-#         if not ch:
-#             time.sleep(0.1)  # Prevent CPU overload
-#             continue
-#         if ch == '\n' and has_navigated:
-#             sys.stdout.write(f"\033[{num_lines}A")
-#             sys.stdout.flush()
-#             for _ in range(num_lines):
-#                 sys.stdout.write("\033[K\n")
-#             sys.stdout.flush()
-#             sys.stdout.write(f"\033[{num_lines}A")
-#             sys.stdout.flush()
-#             return profile_files[selected_idx].stem
-#         elif ch.lower() == 'w':
-#             if selected_idx >= 0:
-#                 sys.stdout.write(f"\033[{selected_idx + 2}A\r  ")
-#                 sys.stdout.flush()
-#                 selected_idx -= 1
-#                 sys.stdout.write(f"\033[{selected_idx + 2}A\r> ")
-#                 sys.stdout.flush()
-#                 sys.stdout.write(f"\033[{num_lines - selected_idx - 1}B")
-#                 sys.stdout.flush()
-#                 has_navigated = True
-#         elif ch.lower() == 's':
-#             if selected_idx < len(profile_files) - 1:
-#                 sys.stdout.write(f"\033[{selected_idx + 2}A\r  ")
-#                 sys.stdout.flush()
-#                 selected_idx += 1
-#                 sys.stdout.write(f"\033[{selected_idx + 2}A\r> ")
-#                 sys.stdout.flush()
-#                 sys.stdout.write(f"\033[{num_lines - selected_idx - 1}B")
-#                 sys.stdout.flush()
-#                 has_navigated = True
-#         else:
-#             print("\rUse up/w, down/s, or enter to select.")
-
-
-
 def get_key() -> str:
     """Read a single key press without echoing."""
     fd = sys.stdin.fileno()
@@ -336,63 +398,123 @@ def get_key() -> str:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     return ch
 
+def select_profile(up=None, down=None, enter=None, lcd=None) -> str:
+    
+    # Refactor for Pillow
+    #lcd.clear()
+    img = Image.new("RGB", (320, 240), "WHITE")
+    draw = ImageDraw.Draw(img)
 
-def select_profile(up=None, down=None, enter=None) -> str:
     """Prompt user to select a profile from user_profiles using WASD."""
     profiles_dir = PROFILES_DIR
     profiles = sorted(profiles_dir.glob("*.json"))
+
     if not profiles:
-        print("No profiles found in user_profiles/. Creating default profile.")
+        error_msg = "No profiles found in user_profiles/. Creating default profile."
+        print(error_msg)
+        error_x = (320 - draw.textlength(error_msg, font=font_menu)) // 2  # Center text dynamically
+        draw.text((error_x, 10), error_msg, font=font_menu, fill="BLACK")
+        lcd.ShowImage(img)
         return "default_profile"
-    
-    
+
     selected_idx = 0
     while True:
+        img = Image.new("RGB", (320, 240), "WHITE")
+        draw = ImageDraw.Draw(img)
         os.system('cls' if os.name == 'nt' else 'clear')
-        print("\nSelect a profile (Up/Down to navigate, Enter to select):")
+
+        prompt_msg = "Select a profile"
+        prompt_msg2 = "(Up/Down to navigate, Enter to select)"
+
+        print("\n" + prompt_msg)
+
+        # Compute individual text widths for correct centering
+        prompt_x = (320 - draw.textlength(prompt_msg, font=font_menu)) // 2
+        prompt_x2 = (320 - draw.textlength(prompt_msg2, font=font_menu)) // 2  # Center separately
+
+        # Draw text with correct alignment
+        draw.text((prompt_x, 30), prompt_msg, font=font_menu, fill="BLACK")
+        draw.text((prompt_x2, 47), prompt_msg2, font=font_menu, fill="BLACK")
+
+
+        y_offset = 70  # Adjusted for profile listing
         for i, profile in enumerate(profiles):
             marker = ">" if i == selected_idx else " "
-            print(f"{marker} {profile.name}")
+            profile_text = f"{marker} {profile.name}"
+            print(profile_text)
+            profile_x = (320 - draw.textlength(profile_text, font=font_menu)) // 2
+            draw.text((profile_x, y_offset), profile_text, font=font_menu, fill="BLACK")
+            y_offset += 20  # Move down for each profile
+
         sys.stdout.flush()
+        
+        img = img.rotate(90, expand=True)
+        lcd.ShowImage(img)
 
         ch = get_input(up=up, down=down, enter=enter)
         if ch in ('\r', '\n'):
             try:
+                selected_profile = profiles[selected_idx].name
+                print(f"\nSelected profile: {selected_profile}")
                 
-                print(f"\nSelected profile: {profiles[selected_idx].name}")
+                selected_x = (320 - draw.textlength(selected_profile, font=font_menu)) // 2
+                draw.text((selected_x, y_offset + 20), f"Selected profile: {selected_profile}", font=font_menu, fill="BLACK")
+
+                return selected_profile
             
-                """
-                print(f"  HRTF Subject: {profile_data['hrtf_subject']} ({'Female' if profile_data['hrtf_subject'] == '019' else 'Male'})")
-                print(f"  Head Width: {profile_data.get('head_width', 15.2):.2f} cm")
-                print(f"  Head Length: {profile_data.get('head_length', 19.0):.2f} cm")
-                print(f"  Effective Radius: {profile_data['effective_radius']:.2f} cm")
-                """
-                
-                return profiles[selected_idx].name
             except json.JSONDecodeError:
-                print(f"Error: {profiles[selected_idx].name} is not a valid JSON file.")
-                return profiles[selected_idx].name
+                error_msg = f"Error: {selected_profile} is not a valid JSON file."
+                print(error_msg)
+                error_x = (320 - draw.textlength(error_msg, font=font_menu)) // 2
+                draw.text((error_x, y_offset + 40), error_msg, font=font_menu, fill="BLACK")
+                return selected_profile
+        
         elif ch.lower() == 'w' and selected_idx > 0:
             selected_idx -= 1
         elif ch.lower() == 's' and selected_idx < len(profiles) - 1:
             selected_idx += 1
 
-
-
-def run_calibration_function(up=None, down=None, left=None, right=None, enter=None) -> str:
+def run_calibration_function(up=None, down=None, left=None, right=None, enter=None, lcd=None) -> str:
+    
+    # Refactor in Pillow for display
+    global font_large, font_menu
+    
+    # Clear screen and double-check height and width. This allows for real-time resizing
+    img = Image.new("RGB", (320, 240), "WHITE")
+    draw = ImageDraw.Draw(img)
+    
     """Main calibration workflow."""
     print("=== HRTF Calibration ===")
-    user_id = select_profile(up=up, down=down, enter=enter)
+    title_text = "=== HRTF Calibration ==="
+    title_x = (320 - draw.textlength(title_text, font=font_menu)) // 2  # Center text horizontally
+    draw.text((title_x, 5), title_text, font=font_menu, fill="BLACK")
     
+    img = img.rotate(90, expand=True)
+    lcd.ShowImage(img)
+    time.sleep(1)
+    user_id = select_profile(up=up, down=down, enter=enter, lcd=lcd)
+    
+    img = Image.new("RGB", (320, 240), "WHITE")
+    draw = ImageDraw.Draw(img)
     if not user_id:
-        print("Calibration failed: No profiles available")
-        return "Calibration failed: No profiles available"
+        error_msg = "Calibration failed: No profiles available"
+        print(error_msg)
+        error_x = (320 - draw.textlength(error_msg, font=font_menu)) // 2  # Center horizontally
+        draw.text((error_x, 30), error_msg, font=font_menu, fill="BLACK")
+        return error_msg
+
     print(f"{user_id}")
+    user_x = (320 - draw.textlength(str(user_id), font=font_menu)) // 2
+    draw.text((user_x, 50), str(user_id), font=font_menu, fill="BLACK")
+    
     profile_path = PROFILES_DIR / f"{user_id}"
     os.makedirs(PROFILES_DIR, exist_ok=True)
-    
+    img = img.rotate(90, expand=True)
+    lcd.ShowImage(img)
+    time.sleep(1)
+
     hrtf_subjects = ['003', '019']
-    calibration_results = calibration_routine(hrtf_subjects, NORMALIZED_ANGLES, up=up, down=down, left=left, right=right, enter=enter)
+    calibration_results = calibration_routine(hrtf_subjects, NORMALIZED_ANGLES, up=up, down=down, left=left, right=right, enter=enter, lcd=lcd)
     
     head_params, hrtf_subject = estimate_head_params(calibration_results)
     profile = {
@@ -401,22 +523,46 @@ def run_calibration_function(up=None, down=None, left=None, right=None, enter=No
         'calibration_data': calibration_results,
         'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
     }
+    y_offset = 120  # Start lower to prevent overlap
     try:
         with open(profile_path, 'w') as f:
             json.dump(profile, f, indent=2)
-        print(f"\nCalibration complete! Profile saved to {profile_path}")
-        
+        success_msg = f"Calibration complete! Profile saved to {profile_path}"
+        print(success_msg)
+        success_x = (320 - draw.textlength(success_msg, font=font_menu)) // 2
+        draw.text((success_x, 80), success_msg, font=font_menu, fill="BLACK")
+
         print("\nYour Head Measurements:")
-        print(f"  Head Width: {head_params['head_width']:.2f} cm")
-        print(f"  Head Length: {head_params['head_length']:.2f} cm")
-        print(f"  Effective Radius: {head_params['effective_radius']:.2f} cm")
-        print(f"Selected HRTF Subject: {hrtf_subject} ({'Female' if hrtf_subject == '019' else 'Male'})")
+        head_measure_x = (320 - draw.textlength("Your Head Measurements:", font=font_menu)) // 2
+        draw.text((head_measure_x, 100), "Your Head Measurements:", font=font_menu, fill="BLACK")
+
+        # Display head parameters dynamically
         
+        for key, value in head_params.items():
+            display_text = f"{key.replace('_', ' ').title()}: {value:.2f} cm"
+            text_x = (320 - draw.textlength(display_text, font=font_menu)) // 2
+            print(display_text)
+            draw.text((text_x, y_offset), display_text, font=font_menu, fill="BLACK")
+            y_offset += 20  # Move down for next item
+
+        hrtf_msg = f"Selected HRTF Subject: {hrtf_subject} ({'Female' if hrtf_subject == '019' else 'Male'})"
+        print(hrtf_msg)
+        hrtf_x = (320 - draw.textlength(hrtf_msg, font=font_menu)) // 2
+        draw.text((hrtf_x, y_offset), hrtf_msg, font=font_menu, fill="BLACK")
+
         print("This profile can be used in test.py for personalized spatial audio.")
+        usage_msg = "This profile can be used in test.py for personalized spatial audio."
+        usage_x = (320 - draw.textlength(usage_msg, font=font_menu)) // 2
+        draw.text((usage_x, y_offset + 20), usage_msg, font=font_menu, fill="BLACK")
+        
         return f"Success! Profile saved as {user_id}"
+    
     except Exception as e:
-        print(f"Error saving profile: {str(e)}")
-        return f"Calibration failed: {str(e)}"
+        error_msg = f"Error saving profile: {str(e)}"
+        print(error_msg)
+        error_x = (320 - draw.textlength(error_msg, font=font_menu)) // 2
+        draw.text((error_x, y_offset + 40), error_msg, font=font_menu, fill="BLACK")
+        return error_msg
 
 if __name__ == "__main__":
     run_calibration_function()
