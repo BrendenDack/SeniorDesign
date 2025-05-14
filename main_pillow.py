@@ -11,7 +11,7 @@ from gpiozero.exc import GPIOZeroError
 import threading
 import stt
 from calibrateUserProfile import run_calibration
-from utility import run_spatial_audio, apply_bulk_hrtf, summed_signal_from_file, summed_signal
+from utility import run_spatial_audio, apply_bulk_hrtf, summed_signal_from_file, summed_stems_from_file, apply_selected_hrtf
 from datetime import datetime
 from menu_app_modular.battery_monitor import get_battery_info
 import soundfile as sf
@@ -126,14 +126,14 @@ menus = {
     "title": "Spatial Song Options",
     "options": [  # These will be updated dynamically when entering the menu
         {"label": "Play Spatial Song", "target": None, "action": "play_spatial_song", "action_type": "python"},
-        {"label": "Play Stems", "target": None, "action": "play_spatial_song", "action_type": "python"},
+        {"label": "Play Stems", "target": None, "action": "play_stems", "action_type": "python"},
         {"label": "Back", "target": "back"}
     ]
     },
     "submenu_Settings": {
         "title": "Settings",
         "options": [
-            {"label": "Change Time", "target": None, "action" : "date", "action_type" : "shell"},
+            {"label": "Clock", "target": None, "action" : "date", "action_type" : "shell"},
             {"label": "Change Profile", "target": "submenu_profiles", "action_type" : "static"},
             {"label": "Edit Profile", "target": None, "action" : "edit_profiles", "action_type" : "python"},
             {"label": "Run Calibration", "target": None, "action" : "run_calibration", "action_type" : "python"},
@@ -160,6 +160,79 @@ def play_selected_song():
     else:
         print("No song selected")
 
+def play_stems():
+    global selected_song
+    print("Check if Spatial file exists")
+    stems_directory = f"Spatial/{selected_song}"
+    if selected_song and os.path.exists(stems_directory):
+        print("Loaded Profile: ", Loaded_Profile)
+        selected_stems = select_profile()
+        apply_selected_hrtf(stems_directory=stems_directory, Loaded_Profile=Loaded_Profile, selected_stems=selected_stems)
+        print("Generate Summed Song")
+        final_output = summed_stems_from_file(stems_directory, selected_stems=selected_stems)
+        print("Write Stems to flac")
+        sf.write('Music/output.flac', final_output, 44100)
+        print("Play stems with music player")
+        stt.play_button("output.flac")
+
+def select_profile():
+    global LCD
+    up_pressed = False
+    down_pressed = False
+    select_pressed = False
+    profiles = ['vocals', 'drums', 'bass', 'other', 'Finish']
+    selected_stems = []
+    selected_idx = 0
+
+    def draw_screen():
+        image = Image.new("RGB", (SCREEN_HEIGHT, SCREEN_WIDTH), "WHITE")  # Corrected order
+        draw = ImageDraw.Draw(image)
+        title = "Select Your Stems:"
+        draw.text((10, 10), title, font=font_menu, fill="BLACK")
+
+        start_y = 40
+        line_height = 20
+        for i, profile in enumerate(profiles):
+            y = start_y + i * line_height
+            marker = ">" if i == selected_idx else " "
+            color = "RED" if profile in selected_stems else "BLACK"
+            text = f"{marker} {profile}"
+
+            # Optional: Highlight background for selected index
+            if i == selected_idx:
+                draw.rectangle([(0, y), (SCREEN_WIDTH, y + line_height)], fill="#DDDDDD")
+
+            draw.text((10, y), text, font=font_menu, fill=color)
+
+        image = image.rotate(90, expand=True)
+        LCD.ShowImage(image)
+
+    while True:
+        draw_screen()
+        if SELECT_BUTTON and SELECT_BUTTON.is_pressed and not select_pressed:
+            profile = profiles[selected_idx]
+            if profile == 'Finish':
+                return selected_stems
+            elif profile in selected_stems:
+                selected_stems.remove(profile)
+            else:
+                selected_stems.append(profile)
+            select_pressed = True  # set to True so it won’t repeat rapidly
+        elif not SELECT_BUTTON.is_pressed:
+            select_pressed = False  # reset the state when button is released
+
+        if DOWN_BUTTON and DOWN_BUTTON.is_pressed and not down_pressed and selected_idx < len(profiles) - 1:
+            selected_idx += 1
+            down_pressed = True
+        elif not DOWN_BUTTON.is_pressed:
+            down_pressed = False
+
+        if UP_BUTTON and UP_BUTTON.is_pressed and not up_pressed and selected_idx > 0:
+            selected_idx -= 1
+            up_pressed = True
+        elif not UP_BUTTON.is_pressed:
+            up_pressed = False
+
 
 def play_spatial_song():
     global selected_song
@@ -172,40 +245,8 @@ def play_spatial_song():
         final_output = summed_signal_from_file(stems_directory)
         print("Write Stems to flac")
         sf.write('Music/output.flac', final_output, 44100)
-        print("Play stems with music player")
-        # subprocess.run(f'ffplay -nodisp -autoexit "Spatial/output.flac"', shell=True)
+        print("Play spatial track with music player")
         stt.play_button("output.flac")
-    #     try:
-    #         os.remove('Music/output.flac')   
-    #         print("File removed.")
-    #     except FileNotFoundError:
-    #         print("File not found.")
-    #     except PermissionError:
-    #         print("No permission to delete the file.")
-    # else:
-    #     return "File not found"
-
-def play_spatial_song_old():
-    print("Check if pickle file exists")
-    stems_directory = f"Spatial/{selected_song}"
-    if selected_song and os.path.exists(stems_directory):
-        print("Loaded Profile: ", Loaded_Profile)
-        spatial_stems = apply_bulk_hrtf(stems_directory, Loaded_Profile=Loaded_Profile)
-        print("Generate summed song")
-        final_output = summed_signal(spatial_stems['vocals'], spatial_stems['bass'], spatial_stems['other'], spatial_stems['drums'])
-        print("Write Stems to flac")
-        sf.write('Spatial/output.flac', final_output, 44100)
-        print("Play stems with ffmpeg")
-        subprocess.run(f'ffplay -nodisp -autoexit "Spatial/output.flac"', shell=True)
-        try:
-            os.remove('Spatial/output.flac')   
-            print("File removed.")
-        except FileNotFoundError:
-            print("File not found.")
-        except PermissionError:
-            print("No permission to delete the file.")
-    else:
-        return "File not found"
 
 # Function for loading music files dynamically into pages
 def load_profile_files(directory="user_profiles"):
@@ -408,6 +449,7 @@ function_dictionary = {
     "run_calibration" : run_calibration_wrapper,
     "apply_spatial_audio" : run_spatial_audio_helper,
     "play_spatial_song" : play_spatial_song,
+    "play_stems" : play_stems,
     "edit_profiles" : run_edit_profiles_wrapper,
     "select_profile" : change_profile_wrapper,
     "play_pause_song" : play_pause,
@@ -517,7 +559,7 @@ def handle_selection(selected_option, h, w, current_menu_key):
         img = img.rotate(90, expand=True)
         update_display(img)
         print(output)
-        time.sleep(5)
+        time.sleep(3)
     else: # Target has no action attached
         LCD.clear()
         message = f"You selected: {label}"
@@ -564,7 +606,7 @@ def draw_menu():
         battery = get_battery_info()
         # stdscr.addstr(1, w - len(battery) - 1, str(int(battery[1])) + "%") # Battery percentage
         # stdscr.addstr(2, w - len(str(GLOBAL_VOLUME)) - 1, str(GLOBAL_VOLUME) + "%") # Volume Battery percentage
-        paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/music_player/battery.png", (140, 221), resize=(15, 15))
+        paste_image("/home/brendendack/SeniorDesignCode/github_code/SeniorDesign/assets/music_player/battery.png", (120, 221), resize=(30, 15))
         draw.text((SCREEN_WIDTH-len(str(int(battery[1])))-80, 220), str(int(battery[1])) + "%", font=font_menu, fill="BLACK")
 
         # volume 

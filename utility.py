@@ -466,6 +466,66 @@ def apply_bulk_hrtf(stems_directory, Loaded_Profile):
 
     print("Finished HRTFS")
 
+def apply_selected_hrtf(stems_directory, Loaded_Profile, selected_stems):
+    
+    if selected_stems == []:
+        return None
+    try:
+        with open(f"{PROFILES_DIR}/{Loaded_Profile}", 'r') as f:
+            profile_data = json.load(f)
+        if not all(k in profile_data for k in ['hrtf_subject', 'effective_radius']):
+            print(f"Invalid profile: {Loaded_Profile} Missing required fields.")
+            profile_data = {
+                "hrtf_subject": "003",
+                "effective_radius": 8.5,
+                "head_width": 15.2,
+                "head_length": 19.0,
+                "stem_directions": {"bass": 0, "vocals": 0, "drums": 0, "other": 0}
+            }
+        print(f"\nSelected profile: {Loaded_Profile}")
+        print(f"  HRTF Subject: {profile_data['hrtf_subject']} ({'Female' if profile_data['hrtf_subject'] == '019' else 'Male'})")
+        print(f"  Head Width: {profile_data.get('head_width', 15.2):.2f} cm")
+        print(f"  Head Length: {profile_data.get('head_length', 19.0):.2f} cm")
+        print(f"  Effective Radius: {profile_data['effective_radius']:.2f} cm")
+    except json.JSONDecodeError:
+        print(f"Error: {Loaded_Profile} is not a valid JSON file.")
+        profile_data = {
+            "hrtf_subject": "003",
+            "effective_radius": 8.5,
+            "head_width": 15.2,
+            "head_length": 19.0,
+            "stem_directions": {"bass": 0, "vocals": 0, "drums": 0, "other": 0}
+        }
+
+    if "stem_directions" not in profile_data:
+        profile_data["stem_directions"] = {"bass": 0, "vocals": 0, "drums": 0, "other": 0}
+    
+    print("Apply HRTFs")
+    angles = profile_data["stem_directions"]
+    test_subject = profile_data['hrtf_subject']
+
+    import psutil
+    with h5py.File(stems_directory, "r") as f_in, h5py.File(stems_directory + ".specific.tmp", "w") as f_out:
+        for stem_name in selected_stems:
+            print(f"Processing {stem_name}")
+            print(f"Memory used: {psutil.Process().memory_info().rss / 1e6:.2f} MB")
+            stem = f_in[stem_name][:]  # Load to RAM
+            
+            print(f"Memory used: {psutil.Process().memory_info().rss / 1e6:.2f} MB")
+            angle = angles[stem_name]
+            stem = Stereo_to_mono(stem)
+            processed = apply_hrtf(stem, angle, test_subject)
+            sf.write(f"Spatial/hrtf_{stem_name}_output.wav", processed, samplerate=44100)
+            print(f"Memory used: {psutil.Process().memory_info().rss / 1e6:.2f} MB")
+            
+            f_out.create_dataset(f"hrtf_{stem_name}", data=processed, compression="gzip")
+            
+            # Free memory
+            del stem, processed
+            gc.collect()
+
+    print("Finished HRTFS")
+
 
 
 def summed_signal_from_file(stems_directory):
@@ -477,6 +537,19 @@ def summed_signal_from_file(stems_directory):
             summed_song += f[stem_name][:]
 
     summed_song /= 4
+
+    #summed_song = (spacial_stems["hrtf_vocals"] + spacial_stems["hrtf_drums"] + spacial_stems["hrtf_bass"] + spacial_stems["hrtf_other"])/4
+    return summed_song
+
+def summed_stems_from_file(stems_directory, selected_stems):
+    
+    summed_song = 0
+    with h5py.File(stems_directory + ".specific.tmp", 'r') as f:
+        for stem_name in selected_stems:
+            #spacial_stems[stem_name] = f[stem_name][:]
+            summed_song += f[f"hrtf_{stem_name}"][:]
+
+    summed_song /= len(selected_stems)
 
     #summed_song = (spacial_stems["hrtf_vocals"] + spacial_stems["hrtf_drums"] + spacial_stems["hrtf_bass"] + spacial_stems["hrtf_other"])/4
     return summed_song
