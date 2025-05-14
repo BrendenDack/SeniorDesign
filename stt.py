@@ -39,7 +39,7 @@ except OSError as e:
     exit()
 
 # Initialize VLC player for playback
-instance = vlc.Instance()
+instance = vlc.Instance('--aout=alsa')
 player = instance.media_player_new()
 tts_player = instance.media_player_new()  # Global player for text-to-speech
 

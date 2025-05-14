@@ -167,6 +167,11 @@ def play_stems():
     if selected_song and os.path.exists(stems_directory):
         print("Loaded Profile: ", Loaded_Profile)
         selected_stems = select_profile()
+        img = Image.new("RGB", (SCREEN_HEIGHT, SCREEN_WIDTH), "WHITE")
+        draw = ImageDraw.Draw(img)
+        draw.text((SCREEN_HEIGHT//2 - len("Processing..."), SCREEN_WIDTH//2), "Processing...", font=font_large, fill="BLACK")
+        img = img.rotate(90, expand=True)
+        update_display(img)
         apply_selected_hrtf(stems_directory=stems_directory, Loaded_Profile=Loaded_Profile, selected_stems=selected_stems)
         print("Generate Summed Song")
         final_output = summed_stems_from_file(stems_directory, selected_stems=selected_stems)
@@ -236,6 +241,11 @@ def select_profile():
 
 def play_spatial_song():
     global selected_song
+    img = Image.new("RGB", (SCREEN_HEIGHT, SCREEN_WIDTH), "WHITE")
+    draw = ImageDraw.Draw(img)
+    draw.text((SCREEN_HEIGHT//2 - len("Processing..."), SCREEN_WIDTH//2), "Processing...", font=font_large, fill="BLACK")
+    img = img.rotate(90, expand=True)
+    update_display(img)
     print("Check if Spatial file exists")
     stems_directory = f"Spatial/{selected_song}"
     if selected_song and os.path.exists(stems_directory):
@@ -367,6 +377,11 @@ def clear_console(): # For manually clearing the console
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def run_spatial_audio_helper():
+    img = Image.new("RGB", (SCREEN_HEIGHT, SCREEN_WIDTH), "WHITE")
+    draw = ImageDraw.Draw(img)
+    draw.text((SCREEN_HEIGHT//2 - len("Processing..."), SCREEN_WIDTH//2), "Processing...", font=font_large, fill="BLACK")
+    img = img.rotate(90, expand=True)
+    update_display(img)
     run_spatial_audio(f"Music/{selected_song}")
 
 def change_profile_wrapper():
@@ -544,8 +559,6 @@ def handle_selection(selected_option, h, w, current_menu_key):
             lines = str(output).split("\n")    
             
             
-                
-        
         img = Image.new("RGB", (SCREEN_HEIGHT, SCREEN_WIDTH), "WHITE")
         draw = ImageDraw.Draw(img)
         #x = SCREEN_WIDTH * 0.5 - len(label)/2
@@ -555,7 +568,7 @@ def handle_selection(selected_option, h, w, current_menu_key):
             y = max(0, min(h - 1, h // 4 - len(lines) // 2 + (i*17)))
             x = max(0, min(w - 1, w // 4 - len(line) // 2))
             #stdscr.addstr(y, x, line[:w - x])
-            draw.text((x, y), line[:w - x], font=font_menu, fill="BLACK")
+            draw.text((x, y), line[:w - x], font=font_large, fill="BLACK")
         img = img.rotate(90, expand=True)
         update_display(img)
         print(output)
@@ -744,8 +757,8 @@ def volume_button_wrapper(increment, GLOBAL_VOLUME):
 
 def main():
     try:
-        global LCD, img, GLOBAL_VOLUME
-        volume_button_wrapper(0,GLOBAL_VOLUME)
+        global LCD, img#, GLOBAL_VOLUME
+        #volume_button_wrapper(0,GLOBAL_VOLUME)
         LCD = LCD_2inch4()
         LCD.Init()
         LCD.clear()
