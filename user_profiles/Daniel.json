@@ -35,9 +35,9 @@
   },
   "timestamp": "2025-05-13 16:50:38",
   "stem_directions": {
-    "bass": -45,
-    "vocals": 137,
-    "drums": -65,
-    "other": -35
+    "bass": -40,
+    "vocals": -180,
+    "drums": -166,
+    "other": 166
   }
 }

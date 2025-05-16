@@ -51,7 +51,7 @@ up_pressed = down_pressed = select_pressed = back_pressed = False
 vol_up_pressed = vol_down_pressed = False
 selected_song = None
 song_paused = False
-Loaded_Profile = None
+Loaded_Profile = "Daniel.json"
 # For LCD
 LCD = None
 SCREEN_WIDTH = 240
@@ -568,7 +568,7 @@ def handle_selection(selected_option, h, w, current_menu_key):
             y = max(0, min(h - 1, h // 4 - len(lines) // 2 + (i*17)))
             x = max(0, min(w - 1, w // 4 - len(line) // 2))
             #stdscr.addstr(y, x, line[:w - x])
-            draw.text((x, y), line[:w - x], font=font_large, fill="BLACK")
+            draw.text((x, y), line[:w - x], font=font_menu, fill="BLACK")
         img = img.rotate(90, expand=True)
         update_display(img)
         print(output)
@@ -768,7 +768,7 @@ def main():
         # Display boot image before proceeding
         img = img.rotate(90, expand=True)
         LCD.ShowImage(img)  
-        time.sleep(4)  # Give time for boot screen to be visible
+        time.sleep(10)  # Give time for boot screen to be visible
         LCD.clear()
         del img
         draw_menu()

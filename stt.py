@@ -263,7 +263,7 @@ def toggle_shuffle():
     #speak("Shuffle mode on." if shuffle else "Shuffle mode off.")
 
 # Volume control functions (new functionality, for the purpose of being able to hear during music)
-NORMAL_VOLUME = 100 #80
+NORMAL_VOLUME = 75 #80
 LOW_VOLUME = 40
 
 def lower_volume():
