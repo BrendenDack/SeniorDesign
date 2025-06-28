@@ -1,0 +1,43 @@
+{
+  "head_width": 18.475,
+  "head_length": 20.84,
+  "effective_radius": 8.045,
+  "hrtf_subject": "003",
+  "calibration_data": {
+    "003": {
+      "preset_angles": [
+        -180,
+        94,
+        -180,
+        -94
+      ],
+      "responses": [
+        -180,
+        90,
+        -150,
+        -90
+      ]
+    },
+    "019": {
+      "preset_angles": [
+        -180,
+        0,
+        -94,
+        -180
+      ],
+      "responses": [
+        -90,
+        60,
+        -180,
+        -90
+      ]
+    }
+  },
+  "timestamp": "2025-05-13 16:50:38",
+  "stem_directions": {
+    "bass": -40,
+    "vocals": -180,
+    "drums": -166,
+    "other": 166
+  }
+}
